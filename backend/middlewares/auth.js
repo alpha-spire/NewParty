@@ -1,18 +1,22 @@
-const User = require('../models/User');
+const User = require("../models/users");
 
-export default async function auth(req, res, next) {
+module.exports = async function auth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-        return res.status(401).json({ message: 'Authorization header missing' });
+        return res
+            .status(401)
+            .json({ result: false, error: "Authorization header missing" });
     }
 
-    const token = authHeader.split(' ')[1];
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+        return res.status(401).json({ result: false, error: "Token missing" });
+    }
 
     const user = await User.findOne({ token });
     if (!user) {
-        return res.status(401).json({ message: 'Invalid token' });
+        return res.status(401).json({ result: false, error: "Invalid token" });
     }
-    req.user = user; // Attach user to request object   
+    req.user = user; // user disponible dans toutes les routes protégées
     next();
-}
-
+};

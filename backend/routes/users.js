@@ -1,25 +1,29 @@
 var express = require("express");
 var router = express.Router();
-const getUserByToken = require("../modules/getUserByToken");
 const User = require("../models/users");
 const uid2 = require("uid2");
 const bcrypt = require("bcrypt");
+const auth = require("../middlewares/auth");
 
 //route SIGNUP inscription user---------------------------------------------------------------
 router.post("/signup", async (req, res) => {
     const { username, password, email } = req.body;
 
+    // Vérification des champs obligatoires
     if (!username || !password || !email) {
-        res.json({ result: false, error: "Missing or empty fields" });
-        return;
+        return res
+            .status(400)
+            .json({ result: false, error: "Missing or empty fields" });
     }
 
-    // Vérifier si user avec ce username existe déjà dans la BDD
-    const data = await User.findOne({ username: username });
-    if (data) {
-        res.json({ result: false, error: "User already exists" });
-        return;
+    // Vérifier user et email uniques avant de faire le hash et la création, pour éviter les opérations inutiles en cas de doublon
+    const existingUser = await User.findOne({ $or: [{ username }, { email }] }); // chainage de conditions pour vérifier à la fois le username et l'email
+    if (existingUser) {
+        return res
+            .status(409)
+            .json({ result: false, error: "User already exists" }); // 409 Conflict est plus approprié pour les doublons que 400 Bad Request
     }
+
     //hachage passsword
     const hash = bcrypt.hashSync(password, 10);
     // creation new user
@@ -29,11 +33,15 @@ router.post("/signup", async (req, res) => {
         password: hash,
         token: uid2(32),
         friendIds: [],
+        eventIds: [],
     });
     //sauvegarde user dans bdd
-    newUser.save().then((newDoc) => {
-        res.json({ result: true, token: newDoc.token });
-    });
+    try {
+        const savedUser = await newUser.save();
+        res.status(201).json({ result: true, token: savedUser.token });
+    } catch (error) {
+        res.status(500).json({ result: false, error: "Error saving user" });
+    }
 });
 
 //route SIGNIN  connection user------------------------------------------------------
@@ -41,54 +49,58 @@ router.post("/signin", async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-        res.json({ result: false, error: "Missing or empty fields" });
+        res.status(400).json({
+            result: false,
+            error: "Missing or empty fields",
+        });
         return;
     }
-
-    const data = await User.findOne({ username: username }).select(
-        "+password +token",
-    );
-    //Vérification mot de passe avec bcrypt
-    if (data && bcrypt.compareSync(password, data.password)) {
-        res.json({ result: true, token: data.token, user: data });
-    } else {
-        res.json({
+    try {
+        const existingUser = await User.findOne({ username }).select(
+            "+password +token",
+        ); // on doit explicitement demander à récupérer le password et le token, car on a mis select: false dans le schéma pour éviter de les retourner par défaut dans les requêtes
+        if (
+            !existingUser &&
+            !bcrypt.compareSync(password, existingUser.password)
+        ) {
+            res.status(401).json({
+                result: false,
+                error: "Invalid credentials", // message d'erreur plus générique pour ne pas indiquer si c'est le username ou le password qui est incorrect, pour des raisons de sécurité
+            });
+        }
+        res.status(200).json({
+            result: true,
+            token: existingUser.token,
+            username: existingUser.username,
+        });
+    } catch (error) {
+        res.status(500).json({
             result: false,
-            error: "User not found or wrong password",
+            error: "Server error",
         });
     }
 });
 
-//route GET obtenir la liste des users--------------------------------------------------------------------------
-router.get("/", async (req, res) => {
-    const data = await User.find();
-    if (data) {
-        res.json({ result: true, users: data });
+//route GET PROFILE : obtenir un user par le token — protégé par auth------------------------------------------------------------------------
+router.get("/profile", auth, async (req, res) => {
+    res.json({ result: true, user: req.user });
+});
+
+//route GET liste users : obtenir la liste des users — protégé par auth--------------------------------------------------------------------------
+router.get("/listUsers", auth, async (req, res) => {
+    try {
+        const users = await User.find().select("username userPhoto"); // on ne retourne que les champs utiles pour la liste des utilisateurs, pas besoin de retourner le password, le token, les amis, etc.
+        res.json({ result: true, users });
+    } catch (error) {
+        res.status(500).json({ result: false, error: "Server error" });
     }
 });
 
-//route GET obtenir un user par le token--------------------------------------------------------------------------
-router.get("/:token", async (req, res) => {
-    const { token } = req.params;
-
-    const data = await getUserByToken(token);
-    if (data) {
-        res.json({ result: true, user: data });
-    } else {
-        res.json({ result: false, error: "invalid token" });
-    }
-});
-
-//route POST UPDATE modifier les infos du user--------------------------------------
-router.post("/update/", async (req, res) => {
-    const authHeader = req.headers.authorization;  //string `Bearer ${user.token}`
-
-    if (!authHeader) {
-        res.json({ error: "Unauthorized" });
-        return;
-    }
-
-    const token = authHeader.split(" ")[1];   // string -> liste de mots ['bearer','${user.token}']
+//route POST UPDATE modifier les infos du user — protégé par auth-------------------------------------
+router.post("/update", auth, async (req, res) => {
+    const user = await User.findOne({ token: req.user.token }).select(
+        "+password",
+    );
 
     const {
         username,
@@ -99,16 +111,12 @@ router.post("/update/", async (req, res) => {
         friendId,
         remove,
     } = req.body;
-    const user = await User.findOne({ token }).select("+password +token");
-    if (!user) {
-        res.json({ error: "unauthorized" });
-        return;
-    }
+
     //objet qui récupère les modifs
     const updateObj = {};
 
     if (email) {
-        updateObj.email = email;
+        updateObj.email = email.toLowerCase().trim(); // on met l'email en minuscules et on retire les espaces pour éviter les doublons du type "
     }
     if (username) {
         updateObj.username = username;
@@ -118,7 +126,9 @@ router.post("/update/", async (req, res) => {
         updateObj.userPhoto = userPhoto;
     }
     if (friendId && !remove) {
-        updateObj.friendIds = [...user.friendIds, friendId];
+        if (!user.friendIds.includes(friendId)) {
+            updateObj.friendIds = [...user.friendIds, friendId];
+        }
     }
 
     if (friendId && remove) {
@@ -126,50 +136,56 @@ router.post("/update/", async (req, res) => {
             (e) => e.toString() !== friendId,
         );
     }
-
+    //si changement de mot de passe demandé, vérifier l'ancien mot de passe avant de faire le hash du nouveau et la MAJ dans la BDD
     if (oldPassword && newPassword) {
-        if (bcrypt.compareSync(oldPassword, user.password)) {
-            const hash = bcrypt.hashSync(newPassword, 10);
-            updateObj.password = hash;
-        } else {
-            res.json({
+        if (!bcrypt.compareSync(oldPassword, user.password)) {
+            return res.json({
                 result: false,
                 error: "Wrong old password",
             });
-            return;
         }
-    }
-    //si modifs présentes : MAJ BDD
-    if (Object.keys(updateObj).length !== 0) {
-        const user = await User.findOneAndUpdate({ token }, updateObj, {
-            returnDocument: "after",
-        });
-        res.json({ user, token });
+        if (newPassword.length < 8) {
+            return res.json({
+                result: false,
+                error: "Password too short",
+            });
+        }
+
+        updateObj.password = bcrypt.hashSync(newPassword, 10);
     } else {
-        res.json({ error: "no modification" });
+        res.json({
+            result: false,
+            error: "Wrong old password",
+        });
+        return;
+    }
+
+    try {
+        //si modifs présentes : MAJ BDD
+        if (Object.keys(updateObj).length !== 0) {
+            const updateUser = await User.findOneAndUpdate(
+                { token: req.user.token },
+                updateObj,
+                {
+                    new: true, //"new:true" remplace "returnDocument: after" dans les versions plus récentes de mongoose, pour retourner le document après la mise à jour, avec les modifications appliquées, au lieu du document avant la mise à jour
+                },
+            );
+            res.json({ user: updateUser, result: true });
+        }
+    } catch (error) {
+        res.status(500).json({ result: false, error: "Server error" });
     }
 });
 
-//route DELETE user------------------------------------------------
-router.delete("/delete", async (req, res) => {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader) {
-        res.json({ error: "Unauthorized" });
-        return;
-    }
-    const token = authHeader.split(" ")[1];
-
-    const id = req.body._id;
-
-    //condition pour supprimer uniquement par admin
-    const data = await getUserByToken(token);
-    if (data) {
-        User.deleteOne({ token }).then(() => {
-            User.find().then((data) => {
-                res.json({ user: data });
-            });
-        });
+//route DELETE user — protégé par auth ------------------------------------------------
+router.delete("/delete", auth, async (req, res) => {
+    try {
+        //req.user est disponible grâce au middleware auth qui a vérifié le token et récupéré l'utilisateur correspondant,
+        // on peut donc utiliser req.user.token pour identifier l'utilisateur à supprimer
+        await User.deleteOne({ token: req.user.token });
+        res.json({ result: true, message: "User deleted" });
+    } catch (error) {
+        res.status(500).json({ result: false, error: "Server error" });
     }
 });
 

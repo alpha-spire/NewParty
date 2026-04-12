@@ -183,7 +183,7 @@ router.delete("/delete", auth, async (req, res) => {
     try {
         //req.user est disponible grâce au middleware auth qui a vérifié le token et récupéré l'utilisateur correspondant,
         // on peut donc utiliser req.user.token pour identifier l'utilisateur à supprimer
-        await User.deleteOne({ token: req.user.token });
+        const result = await User.deleteOne({ _id: req.user._id });
         res.json({ result: true, message: "User deleted" });
     } catch (error) {
         res.status(500).json({ result: false, error: "Server error" });

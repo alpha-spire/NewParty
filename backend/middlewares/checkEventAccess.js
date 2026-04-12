@@ -1,4 +1,4 @@
-const Event = require("../models/Event");
+const Event = require("../models/events");
 
 // Middleware pour vérifier que l'utilisateur a accès à l'événement (membre ou admin)
 module.exports = async function (req, res, next) {

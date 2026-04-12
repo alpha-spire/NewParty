@@ -187,19 +187,37 @@ router.post("/update/:id", auth, async (req, res) => {
     }
 });
 
-//route DELETE event------------------------------------------------
-router.delete("/delete", async (req, res) => {
-    const id = req.body._id;
-
+//route DELETE even uniquement par l'admin -----------------------------------------
+router.delete("/delete/:id", auth, async (req, res) => {
     try {
-        const data = await Event.findOne({ _id: id });
-        if (data) {
-            Event.deleteOne({ _id: id }).then(() => {
-                Event.find().then((data) => {
-                    res.json({ events: data });
-                });
-            });
+        const event = await Event.findById(req.params.id);
+
+        if (!event) {
+            return res
+                .status(404)
+                .json({ result: false, error: "Event not found" });
         }
+
+        // Seul l'admin peut supprimer l'event
+        if (!event.adminId.equals(req.user._id)) {
+            return res
+                .status(403)
+                .json({
+                    result: false,
+                    error: "Only admin can delete this event",
+                });
+        }
+        // Suppression de l'event
+        await Event.deleteOne({ _id: req.params.id });
+        // Suppression de l'event dans la liste des events de tous les users (admin et membres)
+        await User.updateMany(
+            { eventIds: req.params.id },
+            { $pull: { eventIds: req.params.id } }, // $pull pour retirer l'id de l'event du tableau eventIds de tous les users concernés
+        );
+        res.status(200).json({
+            result: true,
+            message: "Event deleted successfully",
+        });
     } catch (error) {
         res.status(500).json({
             result: false,

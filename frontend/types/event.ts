@@ -1,16 +1,24 @@
-import {User} from './user'
-
+import { User } from "./user";
 
 export type Event = {
-  _id: string;
-  title: string;
-  startDate: string;
-  endDate: string;
-  startHour: string;
-  memberIds: string[];
-  location: string;
-  adminId: string;
-  photoEventUrl: string;
+    _id: string;
+    title: string;
+    description: string;
+    location: string;
+    photoEventUrl: string;
+    startDate: string;
+    endDate: string;
+    startHour: string;
+    isPrivate: boolean;
+    adminId: string;
+    memberIds: string[];
+    createdAt: string;
+    updatedAt: string;
 };
 
-export type EventWithUsers = Omit<Event,'memberIds'> & {memberIds : User[]}
+export type EventWithUsers = Omit<Event, "adminId" | "memberIds"> & {
+    // Omit prend Event et supprime adminId et memberIds
+    // & fusionne le résultat de Omit avec un nouveau type qui contient les champs adminId et memberIds avec les types modifiés
+    adminId: Pick<User, "_id" | "username" | "userPhoto">; // pick créé un nouveau typeuniquement les champs populés dans le backend
+    memberIds: Pick<User, "_id" | "username" | "userPhoto">[];
+};

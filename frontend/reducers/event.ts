@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { EventWithUsers } from ".././types/event";
-import { useSelector } from "react-redux";
+
 
 export type EventState = {
   value: EventWithUsers | null;
@@ -26,6 +26,9 @@ export const eventSlice = createSlice({
 export const { addEvent, removeEvent } = eventSlice.actions;
 export default eventSlice.reducer;
 
+
+// Custom hook pour accéder à l'état de l'événement
+// usage dans les composants : const event = useEventState()
 export const useEventState = () => {
-  return useSelector((state: { event: EventState }) => state.event.value);
+  return (state: { event: EventState }) => state.event.value;
 };

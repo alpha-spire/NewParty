@@ -4,7 +4,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
-import UserScreen from "./screens/userSign/screen";
+import UserScreen from "./screens/userSign/welcomeParty";
 import ChatsScreen from "./screens/chats/ChatsScreen";
 import EventScreen from "./screens/events/EventsScreen";
 import AlbumsScreen from "./screens/albums/AlbumsScreen";

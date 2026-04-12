@@ -7,37 +7,51 @@ import { login } from "../../reducers/user";
 import { useNavigation } from "@react-navigation/native";
 import { BACKENDADRESS } from "../../config";
 
-
 const EMAIL_REGEX: RegExp = /^\S+@\S+\.\S+$/;
 
-export default function SignUpModal({
-    onClose,
-    visible,
-}: {
+type SignUpModalProps = {
     onClose: () => void;
     visible: boolean;
-}) {
+};
+
+export default function SignUpModal({ onClose, visible }: SignUpModalProps) {
     const navigation = useNavigation<any>();
     const dispatch = useDispatch();
 
+    //champs du formulaire d'inscription
     const [email, setEmail] = useState("");
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
-    const [isGoodPassword, setIsGoodPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    //champs d'erreur pour la validation du formulaire
     const [passwordError, setPasswordError] = useState(false);
     const [emailError, setEmailError] = useState(false);
     const [missingError, setMissingError] = useState(false);
     const [userError, setUserError] = useState(false);
 
-    const handleRegister = () => {
-        // setIsGoodPassword(password);
-        // setEmail(email);
+    // État de chargement pendant l'appel API
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Réinitialise tous les champs du formulaire
+    const resetFormulaire = () => {
+        setEmail("");
+        setPassword("");
+        setUsername("");
+        setConfirmPassword("");
+    };
+
+    const handleRegister = async () => {
         setEmailError(false);
         setMissingError(false);
         setUserError(false);
         setPasswordError(false);
 
-        if (isGoodPassword !== password) {
+        // Validations coté client avant d'envoyer la requête au backend
+        if (!email || !username || !password || !confirmPassword) {
+            setMissingError(true);
+            return;
+        }
+        if (confirmPassword !== password) {
             setPasswordError(true);
             return;
         }
@@ -46,104 +60,119 @@ export default function SignUpModal({
             return;
         }
 
-        fetch(BACKENDADRESS + "/users/signup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                email,
-                username,
-                password,
-            }),
-        })
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.error === "Missing or empty fields") {
-                    setMissingError(true);
-                }
-                if (data.error === "User already exists") {
-                    setUserError(true);
-                }
-                if (data.result) {
-                    dispatch(
-                        login({
-                            email,
-                            username,
-                            token: data.token,
-                            userPhoto: "",
-                        }),
-                    );
-                    navigation.navigate("TabNavigator");
-                    onClose();
-                }
-            })
-            .catch(console.error);
-        setEmail("");
-        setPassword("");
-        setUsername("");
-        setIsGoodPassword("");
+        setIsLoading(true);
+        try {
+            const response = await fetch(BACKENDADRESS + "/users/signup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email,
+                    username,
+                    password,
+                }),
+            });
+
+            const data = await response.json();
+            // Gestion des erreurs retournées par le backend
+            if (data.error === "Missing or empty fields") {
+                setMissingError(true);
+            }
+            if (data.error === "Username or email already exists") {
+                setUserError(true);
+            }
+            //inscription réussie, on dispatch l'action de login pour mettre à jour
+            //  le store avec les infos de l'utilisateur et on navigue vers l'écran
+            //  principal de l'application
+
+            if (data.result) {
+                dispatch(
+                    login({
+                        email,
+                        username,
+                        token: data.token,
+                        userPhoto: null, // pas de photo à l'inscription
+                    }),
+                );
+                onClose();
+                navigation.navigate("TabNavigator");
+            }
+        } catch (error) {
+            console.error("Error during registration:", error);
+        } finally {
+            setIsLoading(false);
+            resetFormulaire();
+        }
     };
 
     return (
         <Modal visible={visible} transparent style={styles.modal}>
             <View style={styles.container}>
-                <View>
-                    <Xbutton
-                        colour="black"
-                        size="s"
-                        text="X  "
-                        onPress={onClose}
-                    />
-                </View>
+                {/* Bouton fermeture */}
+                <Xbutton colour="black" size="s" text="X  " onPress={onClose} />
                 <Text style={styles.maintext}>S'INSCRIRE</Text>
 
+                {/* Champ email */}
                 <TextInput
                     style={styles.input}
                     placeholder="Email"
                     placeholderTextColor="grey"
                     onChangeText={(value) => setEmail(value)}
                     value={email}
+                    keyboardType="email-address" // clavier adapté sur mobile
+                    autoCapitalize="none" // pas de majuscule automatique
                 />
                 {emailError && (
-                    <Text style={styles.error}>Invalid email address</Text>
+                    <Text style={styles.error}>Adresse email invalide</Text>
                 )}
+
+                {/* Champ username */}
                 <TextInput
                     style={styles.input}
                     placeholder="Username"
                     placeholderTextColor="grey"
                     onChangeText={(value) => setUsername(value)}
                     value={username}
+                    autoCapitalize="none"
                 />
                 {userError && (
-                    <Text style={styles.error}>"User already exists"</Text>
+                    <Text style={styles.error}>
+                        "Username ou email déjà utilisé"
+                    </Text>
                 )}
+
+                {/* Champ password */}
                 <TextInput
                     style={styles.input}
                     placeholder="Mot de passe"
                     placeholderTextColor="grey"
-                    secureTextEntry
+                    secureTextEntry // masque le mot de passe
                     onChangeText={(value) => setPassword(value)}
                     value={password}
                 />
                 <TextInput
                     style={styles.input}
-                    placeholder="Vérification du Mot de passe"
+                    placeholder="Confirmer le Mot de passe"
                     placeholderTextColor="grey"
                     secureTextEntry
-                    onChangeText={(value) => setIsGoodPassword(value)}
-                    value={isGoodPassword}
+                    onChangeText={(value) => setConfirmPassword(value)}
+                    value={confirmPassword}
                 />
                 {passwordError && (
-                    <Text style={styles.error}>Invalid password</Text>
+                    <Text style={styles.error}>
+                        Les mots de passe ne correspondent pas
+                    </Text>
                 )}
                 {missingError && (
                     <Text style={styles.error}>
                         Veuillez remplir tous les champs
                     </Text>
                 )}
+
+                {/* Bouton d'inscription */}
                 <Button
                     colour="pink"
                     size="m"
-                    text="GO"
+                    text={isLoading ? "Chargement..." : "GO"}
                     onPress={handleRegister}
                 />
             </View>

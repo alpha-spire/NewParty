@@ -3,6 +3,7 @@ var router = express.Router();
 const Event = require("../models/events");
 const User = require("../models/users");
 const auth = require("../middlewares/auth");
+const checkEventAccess = require("../middlewares/checkEventAccess");
 
 //route POST creation event d'un user------------------------------------------------------
 router.post("/createEvent", auth, async (req, res) => {
@@ -73,7 +74,7 @@ router.get("/", auth, async (req, res) => {
 
 //route GET obtenir un event par son id — protégé par auth---------------------------------------------------------------
 router.get("/:id", auth, async (req, res) => {
- console.log("ID reçu :", req.params.id)
+    console.log("ID reçu :", req.params.id);
     try {
         const event = await Event.findById(req.params.id)
             .populate("adminId", "username userPhoto")
@@ -86,10 +87,12 @@ router.get("/:id", auth, async (req, res) => {
         }
 
         // Vérifie que l'user est bien membre ou admin de l'event
-        const isAdmin = req.user._id.equals(event.adminId._id)
-        const isMember = event.memberIds.some(e => req.user._id.equals(e._id)) 
+        const isAdmin = req.user._id.equals(event.adminId._id);
+        const isMember = event.memberIds.some((e) =>
+            req.user._id.equals(e._id),
+        );
 
-        if(!isAdmin && !isMember) {
+        if (!isAdmin && !isMember) {
             return res
                 .status(403)
                 .json({ result: false, error: "access denied" });
@@ -105,23 +108,23 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 //route POST UPDATE : modifie l'event-------------------------------------------
-router.post("/update/:token", async (req, res) => {
-    const {
-        title,
-        location,
-        photoEventUrl,
-        startDate,
-        endDate,
-        startHour,
-        endHour,
-        adminId,
-        memberIds,
-        _id,
-    } = req.body;
+router.post("/update/:id", auth, async (req, res) => {
+    try {
+        const event = await Event.findById(re.params._id);
+        if (!event) {
+            return res
+                .status(404)
+                .json({ result: false, error: "event not found" });
+        }
+        // Seul l'admin de l'event peut le modifier
+        if (!event.adminId.equals(req.user._id)) {
+            return res.status(403).json({
+                result: false,
+                error: "Only admin can update this event",
+            });
+        }
 
-    const event = await Event.findOneAndUpdate(
-        { _id },
-        {
+        const {
             title,
             location,
             photoEventUrl,
@@ -131,27 +134,76 @@ router.post("/update/:token", async (req, res) => {
             endHour,
             adminId,
             memberIds,
-        },
-        {
-            returnDocument: "after",
-        },
-    );
-    res.json({ event: event });
+            _id,
+        } = req.body;
+
+        //objet qui récupère les modifs
+        const updateObj = {};
+        if (title) {
+            updateObj.title = title;
+        }
+        if (location) {
+            updateObj.location = location;
+        }
+        if (photoEventUrl) {
+            updateObj.photoEventUrl = photoEventUrl;
+        }
+        if (startDate) {
+            updateObj.startDate = startDate;
+        }
+        if (endDate) {
+            updateObj.endDate = endDate;
+        }
+        if (startHour) {
+            updateObj.startHour = startHour;
+        }
+        if (endHour) {
+            updateObj.endHour = endHour;
+        }
+        if (memberIds) {
+            updateObj.memberIds = memberIds;
+        }
+        //si modifs présentes : MAJ BDD
+        if (Object.keys(updateObj).length === 0) {
+            return res
+                .status(400)
+                .json({ result: false, error: "No update data provided" });
+        }
+
+        const updateEvent = await Event.findByIdAndUpdate(
+            req.params.id, // id de l'event à modifier
+            updateObj, // objet avec les champs à modifier
+            {
+                new: true, // pour retourner le document après modification
+                runValidators: true, // vérifie les règles du schéma (required, type...)
+            },
+        );
+        res.status(200).json({ result: true, event: updateEvent });
+    } catch (error) {
+        res.status(500).json({
+            result: false,
+            error: "Server error",
+        });
+    }
 });
 
 //route DELETE event------------------------------------------------
-router.delete("/delete/:token", async (req, res) => {
-    const token = req.params.token;
+router.delete("/delete", async (req, res) => {
     const id = req.body._id;
 
-    //condition pour supprimer uniquement par admin(non finalisé)
-    const data = await getUserByToken(token);
-
-    if (data) {
-        Event.deleteOne({ _id: id }).then(() => {
-            Event.find().then((data) => {
-                res.json({ events: data });
+    try {
+        const data = await Event.findOne({ _id: id });
+        if (data) {
+            Event.deleteOne({ _id: id }).then(() => {
+                Event.find().then((data) => {
+                    res.json({ events: data });
+                });
             });
+        }
+    } catch (error) {
+        res.status(500).json({
+            result: false,
+            error: "Server error",
         });
     }
 });

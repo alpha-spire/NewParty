@@ -1,59 +1,44 @@
 var express = require("express");
 var router = express.Router();
-
 const cloudinary = require("cloudinary").v2;
-const fs = require("fs");
-const uniqid = require("uniqid"); // pour générer un nom de fichier unique
+const auth = require("../middlewares/auth");
 
-// route POST upload d'une photo vers cloudinary
-router.post("/", async (req, res) => {
-//   //creation chemin temp pour stocker la photo sur le serveur
-//   const photoPath = `./tmp/${uniqid()}.jpg`;
-//   //deplacement fichier photofromfront du frontend vers dossier tmp
-//   const resultMove = await req.files.photoFromFront.mv(photoPath);
+// route POST upload d'une photo vers cloudinary - protégé par auth
+router.post("/", auth, async (req, res) => {
+    //vérif que le fichier est présent
+    if (!req.files || !req.files.photoFromFront) {
+        return res.status(400).json({ result: false, error: "No file uploaded" });
+    }
 
-//   if (!resultMove) {
-//     const resultCloudinary = await cloudinary.uploader.upload(photoPath);
-//     //suppression fichier temporaire
-//     fs.unlinkSync(photoPath);
-
-//     if (resultCloudinary) {
-//       res.json({
-//         result: true,
-//         photo: {
-//           url: resultCloudinary.secure_url,
-//           date: resultCloudinary.created_at,
-//         },
-//       });
-//     } else {
-//       res.json({ result: false, error: "error" });
-//     }
-//   } else {
-//     res.json({ result: false, error: resultMove });
-//   }
-  try {
-    const resultCloudinary = await cloudinary.uploader
-      .upload_stream(async (error, result) => {
-        if (error) {
-          console.error("Error uploading to Cloudinary:", error);
-          res
-            .status(500)
-            .json({ result: false, error: "Internal Server Error" });
-        } else {
-          res.json({
+    try {
+        // Fonction pour uploader la photo vers Cloudinary, qui retourne une promesse
+        const uploadToCloudinary = () =>
+            new Promise((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream(
+                    { folder: "newparty_photos" }, // organiser les photos dans un dossier spécifique sur Cloudinary
+                    (error, result) => {
+                        // Gérer la réponse de Cloudinary : si erreur → reject, sinon → resolve avec le résultat
+                        if (error) {
+                            if (error) reject(error);
+                            else resolve(result);
+                        }
+                    },
+                );
+                uploadStream.end(req.files.photoFromFront.data); // Envoie les données de la photo à Cloudinary
+            });
+        const result = await uploadToCloudinary(); // Attendre la fin de l'upload pour obtenir le résultat (url de la photo, etc.)
+        
+        // Retourner l'url de la photo uploadée à Cloudinary au frontend
+        res.status(201).json({
             result: true,
             photo: {
-              url: result.secure_url,
-              date: result.created_at,
+                url: result.secure_url,
+                date: result.created_at,
             },
-          });
-        }
-      })
-      .end(req.files.photoFromFront.data);
-  } catch (error) {
-    console.error("Error processing picture:", error);
-    res.status(500).json({ result: false, error: "Internal Server Error" });
-  }
+        });
+    } catch (error) {
+        res.status(500).json({ result: false, error: "Internal Server Error" });
+    }
 });
 
 module.exports = router;

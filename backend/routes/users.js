@@ -168,6 +168,7 @@ router.post("/update", auth, async (req, res) => {
                 updateObj,
                 {
                     new: true, //"new:true" remplace "returnDocument: after" dans les versions plus récentes de mongoose, pour retourner le document après la mise à jour, avec les modifications appliquées, au lieu du document avant la mise à jour
+                    runValidators: true, // vérifie les règles du schéma (required, type...)
                 },
             );
             res.json({ user: updateUser, result: true });

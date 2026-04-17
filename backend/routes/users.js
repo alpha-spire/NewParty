@@ -21,7 +21,7 @@ router.post("/signup", async (req, res) => {
     if (existingUser) {
         return res
             .status(409)
-            .json({ result: false, error: "User already exists" }); // 409 Conflict est plus approprié pour les doublons que 400 Bad Request
+            .json({ result: false, error: "Username or email already exists" }); // 409 Conflict est plus approprié pour les doublons que 400 Bad Request
     }
 
     //hachage passsword
@@ -60,10 +60,10 @@ router.post("/signin", async (req, res) => {
             "+password +token",
         ); // on doit explicitement demander à récupérer le password et le token, car on a mis select: false dans le schéma pour éviter de les retourner par défaut dans les requêtes
         if (
-            !existingUser &&
+            !existingUser ||
             !bcrypt.compareSync(password, existingUser.password)
         ) {
-            res.status(401).json({
+            return res.status(401).json({
                 result: false,
                 error: "Invalid credentials", // message d'erreur plus générique pour ne pas indiquer si c'est le username ou le password qui est incorrect, pour des raisons de sécurité
             });
@@ -91,6 +91,17 @@ router.get("/listUsers", auth, async (req, res) => {
     try {
         const users = await User.find().select("username userPhoto"); // on ne retourne que les champs utiles pour la liste des utilisateurs, pas besoin de retourner le password, le token, les amis, etc.
         res.json({ result: true, users });
+    } catch (error) {
+        res.status(500).json({ result: false, error: "Server error" });
+    }
+});
+
+//route GET liste des amis du user — protégé par auth--------------------------------------------------------------------------
+router.get("/friends", auth, async (req, res) => {
+    try {
+        const user = await User.find(req.user._id)
+        .populate("friendIds","username userPhoto")
+        res.json({ result: true, friends :user.friendIds });
     } catch (error) {
         res.status(500).json({ result: false, error: "Server error" });
     }
@@ -152,13 +163,7 @@ router.post("/update", auth, async (req, res) => {
         }
 
         updateObj.password = bcrypt.hashSync(newPassword, 10);
-    } else {
-        res.json({
-            result: false,
-            error: "Wrong old password",
-        });
-        return;
-    }
+    } 
 
     try {
         //si modifs présentes : MAJ BDD

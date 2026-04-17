@@ -5,6 +5,7 @@ import {
     TextInput,
     GestureResponderEvent,
     Image,
+    Alert,
 } from "react-native";
 import React, { useState } from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
@@ -14,52 +15,64 @@ import FriendsModal from "./FriendsModal";
 import PhotoModal from "./PhotoModal";
 import { BACKENDADRESS } from "../../config";
 import { useSelector, useDispatch } from "react-redux";
-import { UserState } from "../../reducers/user";
+import { addEventId, UserState } from "../../reducers/user";
 import { addEvent } from "../../reducers/event";
 import Header from "../headers/Header";
 
 import DateTimePicker, {
     DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
+import { formatDate, formatHour } from "../../utils/dateUtils";
+import { uploadPhoto } from "../../utils/uploadPhotoUtils";
 
-type UserScreenProps = {
+type CreateEventScreenProps = {
     navigation: NavigationProp<ParamListBase>;
 };
 
-export default function CreateEventScreen({ navigation }: UserScreenProps) {
+export default function CreateEventScreen({
+    navigation,
+}: CreateEventScreenProps) {
+    //champs du formulaire de création d'évènement
     const [title, setTitle] = useState("");
     const [location, setLocation] = useState("");
+    const [memberIds, setMemberIds] = useState<string[]>([]);
+    const [photo, setPhoto] = useState<string>("");
+
+    //Etats des dates et heures de début et de fin de l'évènement
     const [startDate, setStartDate] = useState<Date>(new Date());
     const [startHour, setStartHour] = useState<Date>(new Date());
     const [endDate, setEndDate] = useState<Date>(new Date());
     const [endHour, setEndHour] = useState<Date>(new Date());
-    const [isFriendsModalOpened, setIsFriendsModalOpened] = useState(false);
-    const [isPhotoModalOpened, setIsPhotoModalOpened] = useState(false);
     const [visible, setVisible] = useState(false);
-    const [date, setDate] = useState<Date>(new Date());
-    const [mode, setMode] = useState<"date" | "time">("date");
-    const dispatch = useDispatch();
+
+    //Etat pour différencier les différents types de date à modifier (date de début, date de fin,
+    //  heure de début, heure de fin)
     const [typeDate, setTypeDate] = useState<
         "startDate" | "endDate" | "startHour" | "endHour" | null
     >(null);
-    const [memberIds, setMemberIds] = useState<string[]>([]);
-    const [photo, setPhoto] = useState<string>("");
+    const [date, setDate] = useState<Date>(new Date());
+    const [mode, setMode] = useState<"date" | "time">("date");
 
+    //Etats pour l'ouverture des modals d'ajout de photo et d'amis
+    const [isFriendsModalOpened, setIsFriendsModalOpened] = useState(false);
+    const [isPhotoModalOpened, setIsPhotoModalOpened] = useState(false);
+
+    // État de chargement
+    const [isLoading, setIsLoading] = useState(false);
+
+    const dispatch = useDispatch();
     const user = useSelector((state: { user: UserState }) => state.user.value);
-
-    const showPicker = () => {
-        setVisible(true);
-    };
 
     const showDate = () => {
         setMode("date");
-        showPicker();
+        setVisible(true);
     };
     const showTime = () => {
         setMode("time");
-        showPicker();
+        setVisible(true);
     };
-
+    // Fonction de gestion du changement de date/heure, qui met à jour le champ correspondant
+    // en fonction du type de date sélectionné
     const dateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
         const currentDate = selectedDate || date;
         setDate(currentDate);
@@ -80,67 +93,76 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
         setVisible(false);
     };
 
-    const CreateEvent = () => {
-        if (!title) {
-            alert("veuillez remplir le titre de l'évènement");
-            return;
+    // Fonction de gestion de l'ajout de photo, qui envoie l'image sélectionnée au backend
+    // et met à jour le champ photo avec l'URL retournée
+    const handleAddPhoto = async (imageURI: string) => {
+        if(!user.token) return;
+        const url = await uploadPhoto(imageURI, user.token);
+        if (url) {
+            setPhoto(url);
         }
-        fetch(BACKENDADRESS + `/events/createEvent/${user.token}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                title,
-                location,
-                photoEventUrl: photo,
-                startDate: startDate!.toISOString(),
-                endDate: endDate!.toISOString(),
-                startHour: startHour!.toISOString(),
-                endHour: endHour!.toISOString(),
-                memberIds: memberIds,
-                adminId: user.token,
-            }),
-        })
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.result) {
-
-                    dispatch(addEvent(data.event));
-                }
-                navigation.navigate("TabNavigator", { screen: "Events" });
-            })
-            .catch((error) => {
-                console.log("Create event error", error);
-            });
     };
 
-    const handleAddPhoto = (imageURI: string) => {
-        const formData = new FormData();
-        //@ts-expect-error
-        formData.append("photoFromFront", {
-            uri: imageURI,
-            name: "photo.jpg",
-            type: "image/jpeg",
-        });
-        fetch(BACKENDADRESS + `/upload/`, {
-            method: "POST",
-            body: formData,
-        })
-            .then((response) => response.json())
-            .then((data) => {
-                setPhoto(data.photo.url);
-            })
-            .catch(console.error);
-    };
-
+    // Ajoute un membre à la liste des membres de l'évènement, en évitant les doublons
     const handleAddMember = (member: string) => {
         if (!memberIds.includes(member)) {
             setMemberIds((prevMembers) => [...prevMembers, member]);
         }
     };
-
+    // Supprime un membre de la liste des membres de l'évènement
     const handleRemoveMember = (member: string) => {
         if (memberIds.includes(member)) {
-            setMemberIds(memberIds.filter((e) => member !== e));
+            setMemberIds((prevMember) =>
+                prevMember.filter((e) => member !== e),
+            );
+        }
+    };
+
+    const handleCreateEvent = async () => {
+        if (!title.trim()) {
+            Alert.alert("Erreur", "Veuillez remplir le titre de l'évènement");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const response = await fetch(
+                BACKENDADRESS + "/events/createEvent",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${user.token}`,
+                    },
+                    body: JSON.stringify({
+                        title: title.trim(),
+                        location,
+                        photoEventUrl: photo || null,
+                        startDate: startDate!.toISOString(),
+                        endDate: endDate!.toISOString(),
+                        startHour: startHour!.toISOString(),
+                        endHour: endHour!.toISOString(),
+                        memberIds,
+                    }),
+                },
+            );
+            const data = await response.json();
+            if (!response.ok) {
+                Alert.alert("Erreur", data.error || "Failed to create event");
+                return;
+            }
+            if (data.result) {
+                dispatch(addEvent(data.event));
+                dispatch(addEventId(data.event._id)); // on ajoute l'id de l'event créé à la liste des events de l'utilisateur dans le store pour que ça s'affiche directement dans la liste des events sans avoir à refetch la liste complète depuis le backend
+                navigation.navigate("TabNavigator", { screen: "Events" });
+            }
+        } catch (error) {
+            console.error("Create event error", error);
+            Alert.alert(
+                "Erreur",
+                "Une erreur est survenue lors de la création de l'évènement",
+            );
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -149,8 +171,10 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
             <View style={styles.header}>
                 <Header destination={"Events"} goBack={true} />
             </View>
+
             <View style={styles.container}>
                 <Text style={styles.title}>Création d'évènement</Text>
+                {/* Champ titre */}
                 <TextInput
                     style={styles.input}
                     placeholder="title..."
@@ -158,6 +182,7 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
                     onChangeText={(value) => setTitle(value)}
                     value={title}
                 />
+                {/* photo de l'event et amis */}
                 <View style={styles.photoPlusFriends}>
                     {photo ? (
                         <Image
@@ -184,9 +209,7 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
                         name="usergroup-add"
                         size={105}
                         color={"white"}
-                        onPress={(event: GestureResponderEvent) =>
-                            setIsFriendsModalOpened(true)
-                        }
+                        onPress={() => setIsFriendsModalOpened(true)}
                     />
                     <FriendsModal
                         onClose={() => setIsFriendsModalOpened(false)}
@@ -196,15 +219,17 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
                         memberIds={memberIds}
                     />
                 </View>
-                <View>
-                    <TextInput
-                        style={styles.locationInput}
-                        placeholder="location..."
-                        placeholderTextColor="grey"
-                        onChangeText={(value) => setLocation(value)}
-                        value={location}
-                    />
-                </View>
+
+                {/* Champ localisation */}
+                <TextInput
+                    style={styles.locationInput}
+                    placeholder="Lieu..."
+                    placeholderTextColor="grey"
+                    onChangeText={(value) => setLocation(value)}
+                    value={location}
+                />
+
+                {/* Sélection dates et heures */}
                 <View style={styles.datePlusHour}>
                     <View style={styles.date}>
                         <Text style={styles.texte}>Du</Text>
@@ -215,8 +240,7 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
                                 setTypeDate("startDate");
                             }}
                         >
-                            ...
-                            {`${("0" + startDate.getDate()).slice(-2)}/${("0" + startDate.getMonth()).slice(-2)}/${startDate.getFullYear()}`}
+                            {formatDate(startDate.toISOString())}
                         </Text>
                         <Text style={styles.texte}>au</Text>
                         <Text
@@ -226,8 +250,7 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
                                 setTypeDate("endDate");
                             }}
                         >
-                            ...
-                            {`${("0" + endDate.getDate()).slice(-2)}/${("0" + endDate.getMonth()).slice(-2)}/${endDate.getFullYear()}`}
+                            {formatDate(endDate.toISOString())}
                         </Text>
                     </View>
                     <View style={styles.hour}>
@@ -239,8 +262,7 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
                                 setTypeDate("startHour");
                             }}
                         >
-                            ...
-                            {`${("0" + startHour.getHours()).slice(-2)}:${("0" + startHour.getMinutes()).slice(-2)}`}
+                            {formatHour(startHour.toISOString())}
                         </Text>
                         <Text style={styles.texte}>à</Text>
                         <Text
@@ -250,8 +272,7 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
                                 setTypeDate("endHour");
                             }}
                         >
-                            ...
-                            {`${("0" + endHour.getHours()).slice(-2)}:${("0" + endHour.getMinutes()).slice(-2)}`}
+                            {formatHour(endHour.toISOString())}
                         </Text>
                         {visible && (
                             <DateTimePicker
@@ -263,11 +284,13 @@ export default function CreateEventScreen({ navigation }: UserScreenProps) {
                         )}
                     </View>
                 </View>
+
+                {/* Bouton création */}
                 <Button
                     colour="green"
                     size="m"
                     text="Créer l'évènement"
-                    onPress={CreateEvent}
+                    onPress={handleCreateEvent}
                 />
             </View>
         </View>

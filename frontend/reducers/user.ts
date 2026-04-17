@@ -29,25 +29,25 @@ export const userSlice = createSlice({
         login: (
             state,
             action: PayloadAction<{
-                email: string;
                 username: string;
+                email: string | null;
                 token: string;
                 userPhoto: string | null;
                 eventIds?: string[]; //  optionnel, pas toujours dans la réponse signin
                 friendIds?: string[]; // optionnel, pas toujours dans la réponse signin
             }>,
         ) => {
+            state.value.username = action.payload.username;
             state.value.token = action.payload.token;
             state.value.email = action.payload.email;
-            state.value.username = action.payload.username;
             state.value.userPhoto = action.payload.userPhoto;
             state.value.friendIds = action.payload.friendIds ?? []; //
             state.value.eventIds = action.payload.eventIds ?? [];
         },
         logout: (state) => {
             state.value = {
-                email: null,
                 username: null,
+                email: null,
                 token: null,
                 friendIds: [],
                 eventIds: [],

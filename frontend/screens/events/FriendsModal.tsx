@@ -23,7 +23,8 @@ export default function FriendsModal({
     memberIds,
 }: FriendModalProps) {
     const [users, setUsers] = useState<User[]>([]);
-
+    const [isLoading, setIsLoading] = useState(false);
+    
     useEffect(() => {
         const fetchUserList = async () => {
             try {

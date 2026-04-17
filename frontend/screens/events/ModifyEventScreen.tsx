@@ -5,6 +5,7 @@ import {
     TextInput,
     Image,
     TouchableOpacity,
+    Alert,
 } from "react-native";
 import React, { useState } from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
@@ -13,98 +14,65 @@ import { Fontisto, AntDesign } from "@expo/vector-icons";
 import FriendsModal from "./FriendsModal";
 import PhotoModal from "./PhotoModal";
 import { BACKENDADRESS } from "../../config";
-import { useSelector } from "react-redux";
-import { useEventState } from "../../reducers/event";
+import { useDispatch, useSelector } from "react-redux";
+import { useEventState, removeEvent } from "../../reducers/event";
 import { UserState } from "../../reducers/user";
+import Header from "../headers/Header";
 import DateTimePicker, {
     DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import Header from "../headers/Header";
+import { formatDate, formatHour } from "../../utils/dateUtils";
+import { uploadPhoto } from "../../utils/uploadPhotoUtils";
 
-type UserScreenProps = {
+type ModifyEventScreenProps = {
     navigation: NavigationProp<ParamListBase>;
 };
 
-export default function ModifyEventScreen({ navigation }: UserScreenProps) {
+export default function ModifyEventScreen({
+    navigation,
+}: ModifyEventScreenProps) {
+    // États pour la gestion des inputs de l'évènement
     const [title, setTitle] = useState("");
     const [location, setLocation] = useState("");
+    const [photo, setPhoto] = useState<string>("");
+    const [memberIds, setMemberIds] = useState<string[]>([]);
+    // États pour la gestion des dates et heures de l'évènement
     const [startDate, setStartDate] = useState<Date>(new Date());
     const [startHour, setStartHour] = useState<Date>(new Date());
     const [endDate, setEndDate] = useState<Date>(new Date());
     const [endHour, setEndHour] = useState<Date>(new Date());
+    // États pour la gestion des modals et du date picker
     const [isFriendsModalOpened, setIsFriendsModalOpened] = useState(false);
     const [isPhotoModalOpened, setIsPhotoModalOpened] = useState(false);
+    // États pour la gestion du date picker
     const [visible, setVisible] = useState(false);
     const [date, setDate] = useState(new Date());
     const [mode, setMode] = useState<"date" | "time">("date");
     const [typeDate, setTypeDate] = useState<
         "startDate" | "endDate" | "startHour" | "endHour" | null
     >(null);
-    const [memberIds, setMemberIds] = useState<string[]>([]);
-    const [photo, setPhoto] = useState<string>("");
 
-    const currentEvent = useEventState()!;
+    // États de chargement
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
+    const dispatch = useDispatch();
+
+    // Récupération de l'évènement courant et des données utilisateur depuis le store Redux
+    const currentEvent = useEventState();
+    if (!currentEvent) {
+        navigation.goBack();
+        return null;
+    }
     const user = useSelector((state: { user: UserState }) => state.user.value);
-
-    const handleAddPhoto = async (imageURI: string) => {
-        const formData = new FormData();
-        //@ts-expect-error
-        formData.append("photoFromFront", {
-            uri: imageURI,
-            name: "photo.jpg",
-            type: "image/jpeg",
-        });
-        const response = await fetch(BACKENDADRESS + `/upload/`, {
-            method: "POST",
-            body: formData,
-        });
-        const data = await response.json();
-        if (data) {
-            setPhoto(data.photo.url);
-        }
-    };
-
-    const addMember = () => {
-        setIsFriendsModalOpened(true);
-    };
-
-    const showPicker = () => {
-        setVisible(true);
-    };
 
     const showDate = () => {
         setMode("date");
-        showPicker();
+        setVisible(true);
     };
     const showTime = () => {
         setMode("time");
-        showPicker();
-    };
-
-    const DeleteEvent = async () => {
-        const body: any = { _id: currentEvent._id };
-        const response = await fetch(
-            BACKENDADRESS + `/events/delete/${user.token}`,
-            {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
-            },
-        );
-        navigation.navigate("TabNavigator", { screen: "Events" });
-    };
-
-    const handleAddMember = (member: string) => {
-        if (!memberIds.includes(member)) {
-            setMemberIds((prevMembers) => [...prevMembers, member]);
-        }
-    };
-
-    const handleRemoveMember = (member: string) => {
-        if (memberIds.includes(member)) {
-            setMemberIds(memberIds.filter((e) => member !== e));
-        }
+        setVisible(true);
     };
 
     const dateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -127,181 +95,252 @@ export default function ModifyEventScreen({ navigation }: UserScreenProps) {
         setVisible(false);
     };
 
-    const ModifyEvent = async () => {
-        const body: any = { _id: currentEvent._id };
+    const handleAddPhoto = async (imageURI: string) => {
+        if (!user.token) return;
+        const url = await uploadPhoto(imageURI, user.token);
+        if (url) {
+            setPhoto(url);
+        }
+    };
 
-        if (title) {
-            body.title = title;
+    const handleAddMember = (member: string) => {
+        if (!memberIds.includes(member)) {
+            setMemberIds((prevMembers) => [...prevMembers, member]);
         }
-        if (location) {
-            body.location = location;
-        }
-        if (startDate) {
-            body.startDate = startDate;
-        }
-        if (endDate) {
-            body.endDate = endDate;
-        }
-        if (startHour) {
-            body.startHour = startHour;
-        }
-        if (endHour) {
-            body.endHour = endHour;
-        }
-        if (photo) {
-            body.photoEventUrl = photo;
-        }
+    };
 
-        const response = await fetch(
-            BACKENDADRESS + `/events/update/${user.token}`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
-            },
+    const handleRemoveMember = (member: string) => {
+        if (memberIds.includes(member)) {
+            setMemberIds((prevMembers) =>
+                prevMembers.filter((e) => member !== e),
+            );
+        }
+    };
+
+    const handleDeleteEvent = async () => {
+        // ajouter une confirmation avant de supprimer
+        Alert.alert(
+            "Confirmer la suppression",
+            "Êtes-vous sûr de vouloir supprimer cet évènement ?",
+            [
+                { text: "Annuler", style: "cancel" },
+                {
+                    text: "Supprimer",
+                    style: "destructive",
+                    onPress: async () => {
+                        setIsDeleting(true);
+                        try {
+                            const response = await fetch(
+                                BACKENDADRESS +
+                                    `/events/delete/${currentEvent._id}`,
+                                {
+                                    method: "DELETE",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        Authorization: `Bearer ${user.token}`,
+                                    },
+                                },
+                            );
+                            const data = await response.json();
+                            if (data.result) {
+                                dispatch(removeEvent()); // retire l'event du reducer user
+                                navigation.navigate("TabNavigator", {
+                                    screen: "Events",
+                                });
+                            }
+                        } catch (error) {
+                            console.error("Delete event error:", error);
+                            Alert.alert(
+                                "Erreur",
+                                "Impossible de supprimer l'évènement",
+                            );
+                        } finally {
+                            setIsDeleting(false);
+                        }
+                    },
+                },
+            ],
         );
-        const data = await response.json();
+    };
+    // Modification de l'event — envoie uniquement les champs modifiés
+    const handleModifyEvent = async () => {
+        const updateObj: Record<string, any> = {};
 
-        if (data) {
-            navigation.navigate("TabNavigator", { screen: "Events" });
+        if (title.trim()) updateObj.title = title;
+        if (location) updateObj.location = location;
+        if (startDate) updateObj.startDate = startDate.toISOString();
+        if (endDate) updateObj.endDate = endDate.toISOString();
+        if (startHour) updateObj.startHour = startHour.toISOString();
+        if (endHour) updateObj.endHour = endHour.toISOString();
+        if (photo) updateObj.photoEventUrl = photo;
+
+        if (Object.keys(updateObj).length === 0) {
+            Alert.alert("Info", "Aucune modification effectuée");
+            return;
+        }
+        setIsUpdating(true);
+        try {
+            const response = await fetch(BACKENDADRESS + "/events/update", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${user.token}`,
+                },
+                body: JSON.stringify(updateObj),
+            });
+            const data = await response.json();
+
+            if (data.result) {
+                navigation.navigate("TabNavigator", { screen: "Events" });
+            }
+        } catch (error) {
+            console.error("Modify event error:", error);
+            Alert.alert("Erreur", "Impossible de modifier l'évènement");
+        } finally {
+            setIsUpdating(false);
         }
     };
 
     return (
-        <View>
+        <View style={styles.screen}>
             <View style={styles.header}>
                 <Header destination={"Events"} goBack={true} />
             </View>
+
             <View style={styles.container}>
-                <View>
-                    <Text style={styles.title}>Modification d'évènement</Text>
-                    <TextInput
-                        style={styles.titleInput}
-                        placeholder={currentEvent.title}
-                        placeholderTextColor="grey"
-                        onChangeText={(value) => setTitle(value)}
-                        value={title}
-                    />
-                    <View style={styles.photoPlusFriends}>
-                        {currentEvent.photoEventUrl ? (
-                            <TouchableOpacity
-                                onPress={() => setIsPhotoModalOpened(true)}
-                            >
-                                <Image
-                                    style={styles.photos}
-                                    source={{ uri: currentEvent.photoEventUrl }}
-                                />
-                            </TouchableOpacity>
-                        ) : (
-                            <Fontisto
+                <Text style={styles.title}>Modification d'évènement</Text>
+
+                {/* Champ titre — placeholder = valeur actuelle de l'event */}
+                <TextInput
+                    style={styles.titleInput}
+                    placeholder={currentEvent.title}
+                    placeholderTextColor="grey"
+                    onChangeText={(value) => setTitle(value)}
+                    value={title}
+                />
+
+                {/* Photo et membres */}
+                <View style={styles.photoPlusFriends}>
+                    {currentEvent.photoEventUrl ? (
+                        <TouchableOpacity
+                            onPress={() => setIsPhotoModalOpened(true)}
+                        >
+                            <Image
                                 style={styles.photos}
-                                name="photograph"
-                                size={95}
-                                color={"white"}
-                                onPress={() => setIsPhotoModalOpened(true)}
+                                source={{ uri: currentEvent.photoEventUrl }}
                             />
-                        )}
-
-                        <PhotoModal
-                            onClose={() => setIsPhotoModalOpened(false)}
-                            visible={isPhotoModalOpened}
-                            addPhoto={handleAddPhoto}
-                        />
-
-                        <AntDesign
-                            style={styles.friends}
-                            name="usergroup-add"
-                            size={105}
+                        </TouchableOpacity>
+                    ) : (
+                        <Fontisto
+                            style={styles.photos}
+                            name="photograph"
+                            size={95}
                             color={"white"}
-                            onPress={addMember}
+                            onPress={() => setIsPhotoModalOpened(true)}
                         />
-                        <FriendsModal
-                            onClose={() => setIsFriendsModalOpened(false)}
-                            visible={isFriendsModalOpened}
-                            addMember={handleAddMember}
-                            removeMember={handleRemoveMember}
-                            memberIds={memberIds}
-                        />
-                    </View>
-                    <View>
-                        <TextInput
-                            style={styles.locationInput}
-                            placeholder={currentEvent.location}
-                            placeholderTextColor="grey"
-                            onChangeText={(value) => setLocation(value)}
-                            value={location}
-                        />
-                    </View>
-                    <View style={styles.datePlusHour}>
-                        <View style={styles.date}>
-                            <Text style={styles.texte}>Du </Text>
-                            <Text
-                                style={styles.input}
-                                onPress={() => {
-                                    showDate();
-                                    setTypeDate("startDate");
-                                }}
-                            >
-                                ...
-                                {`${("0" + startDate.getDate()).slice(-2)}/${("0" + startDate.getMonth()).slice(-2)}/${startDate.getFullYear()}`}
-                            </Text>
-                            <Text style={styles.texte}>au</Text>
-                            <Text
-                                style={styles.input}
-                                onPress={() => {
-                                    showDate();
-                                    setTypeDate("endDate");
-                                }}
-                            >
-                                ...
-                                {`${("0" + endDate.getDate()).slice(-2)}/${("0" + endDate.getMonth()).slice(-2)}/${endDate.getFullYear()}`}
-                            </Text>
-                        </View>
-                        <View style={styles.hour}>
-                            <Text style={styles.texte}>De </Text>
-                            <Text
-                                style={styles.input}
-                                onPress={() => {
-                                    showTime();
-                                    setTypeDate("startHour");
-                                }}
-                            >
-                                ...
-                                {`${("0" + startHour.getHours()).slice(-2)}:${("0" + startHour.getMinutes()).slice(-2)}`}
-                            </Text>
-                            <Text style={styles.texte}>à</Text>
-                            <Text
-                                style={styles.input}
-                                onPress={() => {
-                                    showTime();
-                                    setTypeDate("endHour");
-                                }}
-                            >
-                                ...
-                                {`${("0" + endHour.getHours()).slice(-2)}:${("0" + endHour.getMinutes()).slice(-2)}`}
-                            </Text>
-                            {visible && (
-                                <DateTimePicker
-                                    value={date}
-                                    mode={mode}
-                                    is24Hour={true}
-                                    onChange={dateChange}
-                                />
-                            )}
-                        </View>
-                    </View>
-                    <Button
-                        colour="blue"
-                        size="m"
-                        text="Modifier"
-                        onPress={ModifyEvent}
+                    )}
+
+                    <PhotoModal
+                        onClose={() => setIsPhotoModalOpened(false)}
+                        visible={isPhotoModalOpened}
+                        addPhoto={handleAddPhoto}
+                    />
+
+                    <AntDesign
+                        style={styles.friends}
+                        name="usergroup-add"
+                        size={105}
+                        color={"white"}
+                        onPress={() => setIsFriendsModalOpened(true)}
+                    />
+                    <FriendsModal
+                        onClose={() => setIsFriendsModalOpened(false)}
+                        visible={isFriendsModalOpened}
+                        addMember={handleAddMember}
+                        removeMember={handleRemoveMember}
+                        memberIds={memberIds}
                     />
                 </View>
+
+                {/* Champ localisation */}
+                <TextInput
+                    style={styles.locationInput}
+                    placeholder={currentEvent.location || "Lieu ..."}
+                    placeholderTextColor="grey"
+                    onChangeText={(value) => setLocation(value)}
+                    value={location}
+                />
+
+                {/* Dates et heures */}
+                <View style={styles.datePlusHour}>
+                    <View style={styles.date}>
+                        <Text style={styles.texte}>Du </Text>
+                        <Text
+                            style={styles.input}
+                            onPress={() => {
+                                showDate();
+                                setTypeDate("startDate");
+                            }}
+                        >
+                            {formatDate(startDate.toISOString())}
+                        </Text>
+                        <Text style={styles.texte}>au</Text>
+                        <Text
+                            style={styles.input}
+                            onPress={() => {
+                                showDate();
+                                setTypeDate("endDate");
+                            }}
+                        >
+                            {formatDate(endDate.toISOString())}
+                        </Text>
+                    </View>
+                    <View style={styles.hour}>
+                        <Text style={styles.texte}>De </Text>
+                        <Text
+                            style={styles.input}
+                            onPress={() => {
+                                showTime();
+                                setTypeDate("startHour");
+                            }}
+                        >
+                            {formatHour(startHour.toISOString())}
+                        </Text>
+                        <Text style={styles.texte}>à</Text>
+                        <Text
+                            style={styles.input}
+                            onPress={() => {
+                                showTime();
+                                setTypeDate("endHour");
+                            }}
+                        >
+                            {formatHour(endHour.toISOString())}
+                        </Text>
+                        {visible && (
+                            <DateTimePicker
+                                value={date}
+                                mode={mode}
+                                is24Hour={true}
+                                onChange={dateChange}
+                            />
+                        )}
+                    </View>
+                </View>
+
+                {/* Bouton modification event */}
+                <Button
+                    colour="blue"
+                    size="m"
+                    text="Modifier"
+                    onPress={handleModifyEvent}
+                />
+
+                {/* Bouton suppression event*/}
                 <Button
                     colour="red"
                     size="m"
                     text="Supprimer"
-                    onPress={DeleteEvent}
+                    onPress={handleDeleteEvent}
                 />
             </View>
         </View>
@@ -309,6 +348,7 @@ export default function ModifyEventScreen({ navigation }: UserScreenProps) {
 }
 
 const styles = StyleSheet.create({
+    screen: { flex: 1 },
     container: {
         alignItems: "center",
         justifyContent: "center",

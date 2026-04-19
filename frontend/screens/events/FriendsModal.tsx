@@ -6,6 +6,8 @@ import { Xbutton } from "../../ui/xButton";
 import { BACKENDADRESS } from "../../config";
 import { Button } from "../../ui/button";
 import { User } from "../../types/user";
+import { useSelector } from "react-redux";
+import { UserState } from "../../reducers/user";
 
 type FriendModalProps = {
     onClose: () => void;
@@ -22,39 +24,49 @@ export default function FriendsModal({
     removeMember,
     memberIds,
 }: FriendModalProps) {
-    const [users, setUsers] = useState<User[]>([]);
+    const [friends, setFriends] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    
-    useEffect(() => {
-        const fetchUserList = async () => {
-            try {
-                const response = await fetch(BACKENDADRESS + "/users", {});
-                const data = await response.json();
+    const user = useSelector((state: { user: UserState }) => state.user.value);
 
-                setUsers(data.users);
+    useEffect(() => {
+        // Ne fetch que quand la modal s'ouvre et que le token est disponible
+        if (!visible || !user.token) return;
+
+        const fetchFriends = async () => {
+            setIsLoading(true);
+            try {
+                const response = await fetch(BACKENDADRESS + "/users/friends", {
+                    headers: { Authorization: `Bearer ${user.token}` },
+                });
+
+                if (!response.ok) {
+                    console.error("Erreur fetch friends:", response.status);
+                    return;
+                }
+                const data = await response.json();
+                if (data.result) {
+                    setFriends(data.friends);
+                }
             } catch (error) {
                 console.error("Erreur de récupération Users", error);
+            }finally {
+                setIsLoading(false);
             }
         };
-        fetchUserList();
-    }, []);
+        fetchFriends();
+    }, [visible]);
 
-    const handleRegister = () => {
-        onClose();
-    };
 
-    const friendsList = users.map((user) => (
+    const friendsList = friends.map((user) => (
         <View key={user._id} style={styles.friend}>
             <Text style={styles.texte}>{user.username}</Text>
             <BouncyCheckbox
                 size={25}
                 fillColor="red"
                 unFillColor="#FFFFFF"
-                text="Custom Checkbox"
                 isChecked={memberIds.includes(user._id)}
                 iconStyle={{ borderColor: "red" }}
                 innerIconStyle={{ borderWidth: 2 }}
-                textStyle={{ fontFamily: "JosefinSans-Regular" }}
                 onPress={(isChecked: boolean) => {
                     if (isChecked) {
                         addMember(user._id);
@@ -70,14 +82,28 @@ export default function FriendsModal({
         <Modal visible={visible} transparent style={styles.modal}>
             <View style={styles.container}>
                 <Xbutton colour="black" size="m" text="X  " onPress={onClose} />
+                <Text style={styles.title}>Inviter des amis</Text>
+
+                {/* Affiche un message pendant le chargement */}
+                {isLoading ? (
+                    <Text style={styles.texte}>Chargement...</Text>
+                ) : friends.length === 0 ? (
+                    // Message si pas d'amis — invite à en ajouter depuis FriendsScreen
+                    <Text style={styles.emptyText}>
+                        Aucun ami pour le moment.{"\n"}
+                        Ajoutes-en depuis l'onglet Amis !
+                    </Text>
+                ) : (
                 <ScrollView contentContainerStyle={styles.galleryContainer}>
                     {friendsList}
-                </ScrollView>
+                </ScrollView>)}
+
+                {/* Bouton fermeture — simplifié, handleRegister ne faisait que onClose() */}
                 <Button
                     colour="grey"
                     size="m"
                     text="Enregistrer"
-                    onPress={() => handleRegister()}
+                    onPress={onClose}
                 />
             </View>
         </Modal>
@@ -108,7 +134,20 @@ const styles = StyleSheet.create({
         minWidth: 200,
         maxWidth: 200,
     },
-
+    title: {
+        color: "white",
+        fontSize: 20,
+        fontWeight: "bold",
+        marginBottom: 15,
+    },
+        emptyText: { // style pour le message "aucun ami"
+        color: "grey",
+        fontSize: 16,
+        textAlign: "center",
+        marginTop: 20,
+        paddingHorizontal: 20,
+        lineHeight: 24,
+    },
     friend: {
         flexDirection: "row",
         justifyContent: "space-evenly",
@@ -117,9 +156,6 @@ const styles = StyleSheet.create({
         borderTopColor: "white",
         backgroundColor: "#212121",
         width: "100%",
-    },
-    checkbox: {
-        alignSelf: "center",
     },
     galleryContainer: {
         flexWrap: "wrap",

@@ -72,6 +72,7 @@ router.post("/signin", async (req, res) => {
             result: true,
             token: existingUser.token,
             username: existingUser.username,
+            _id: existingUser._id,
         });
     } catch (error) {
         res.status(500).json({
@@ -86,11 +87,24 @@ router.get("/profile", auth, async (req, res) => {
     res.json({ result: true, user: req.user });
 });
 
-//route GET liste users : obtenir la liste des users — protégé par auth--------------------------------------------------------------------------
-router.get("/listUsers", auth, async (req, res) => {
+//route GET recherche un user par son username — protégé par auth--------------------------------------------------------------------------
+router.get("/search/:username", auth, async (req, res) => {
     try {
-        const users = await User.find().select("username userPhoto"); // on ne retourne que les champs utiles pour la liste des utilisateurs, pas besoin de retourner le password, le token, les amis, etc.
-        res.json({ result: true, users });
+        // Cherche un user par username exact ,On exclut l'user connecté des résultats
+        const foundUser = await User.findOne({
+            username: req.params.username,
+            _id: { $ne: req.user._id }, // $ne = "not equal" — exclut l'user connecté
+        }).select("username userPhoto"); // on ne retourne que les champs utiles pour la liste des utilisateurs, pas besoin de retourner le password, le token, les amis, etc.
+        if (!foundUser) {
+            return res
+                .status(404)
+                .json({ result: false, error: "User not found" });
+        }
+
+        // Vérifie si déjà ami
+        const isAlreadyFriend = req.user.friendIds.includes(foundUser._id);
+
+        res.json({ result: true, user: foundUser, isAlreadyFriend });
     } catch (error) {
         res.status(500).json({ result: false, error: "Server error" });
     }
@@ -99,9 +113,16 @@ router.get("/listUsers", auth, async (req, res) => {
 //route GET liste des amis du user — protégé par auth--------------------------------------------------------------------------
 router.get("/friends", auth, async (req, res) => {
     try {
-        const user = await User.find(req.user._id)
-        .populate("friendIds","username userPhoto")
-        res.json({ result: true, friends :user.friendIds });
+        const user = await User.findById(req.user._id).populate(
+            "friendIds",
+            "username userPhoto",
+        );
+        if (!user) {
+            return res
+                .status(404)
+                .json({ result: false, error: "User not found" });
+        }
+        res.json({ result: true, friends: user.friendIds });
     } catch (error) {
         res.status(500).json({ result: false, error: "Server error" });
     }
@@ -163,7 +184,7 @@ router.post("/update", auth, async (req, res) => {
         }
 
         updateObj.password = bcrypt.hashSync(newPassword, 10);
-    } 
+    }
 
     try {
         //si modifs présentes : MAJ BDD
@@ -177,6 +198,8 @@ router.post("/update", auth, async (req, res) => {
                 },
             );
             res.json({ user: updateUser, result: true });
+        } else {
+            res.status(400).json({ result: false, error: "No modification" });
         }
     } catch (error) {
         res.status(500).json({ result: false, error: "Server error" });

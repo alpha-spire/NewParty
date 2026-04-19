@@ -184,13 +184,11 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     eventBox: {
-        display: "flex",
         flexDirection: "row",
         backgroundColor: "#1b1b1b",
         borderTopColor: "white",
         borderTopWidth: 0.5,
-        marginBottom: -37,
-        width: 375,
+        width: "100%",
     },
     eventTitle: {
         //  style dédié pour le titre de l'event

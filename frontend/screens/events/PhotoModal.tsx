@@ -6,6 +6,7 @@ import {
     Modal,
     Image,
     TouchableOpacity,
+    Alert,
 } from "react-native";
 import { useState } from "react";
 import { Xbutton } from "../../ui/xButton";
@@ -30,13 +31,17 @@ export default function PhotoModal({
         });
 
         if (result.canceled) {
-            alert("Aucune image selectionnée");
+            Alert.alert("Info", "Aucune image sélectionnée");
         } else {
             setImageURI(result.assets[0].uri);
         }
     }
 
     const handleRegister = () => {
+        if (!imageURI) {
+            Alert.alert("Erreur", "Veuillez sélectionner une image");
+            return;
+        }
         addPhoto(imageURI);
         onClose();
     };
@@ -85,15 +90,6 @@ const styles = StyleSheet.create({
         fontSize: 30,
         alignItems: "center",
         justifyContent: "center",
-    },
-    buttonContainer: {
-        flex: 0.1,
-        flexDirection: "row",
-        alignItems: "flex-end",
-        justifyContent: "space-between",
-        paddingTop: 20,
-        paddingLeft: 20,
-        paddingRight: 20,
     },
     image: {
         height: 200,

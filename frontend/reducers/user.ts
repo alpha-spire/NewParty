@@ -2,6 +2,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export type UserState = {
     value: {
+        _id: string| null;
         email: string | null;
         username: string | null;
         token: string | null;
@@ -13,6 +14,7 @@ export type UserState = {
 
 const initialState: UserState = {
     value: {
+        _id : null,
         email: null,
         username: null,
         token: null,
@@ -29,6 +31,7 @@ export const userSlice = createSlice({
         login: (
             state,
             action: PayloadAction<{
+                _id:string|null
                 username: string;
                 email: string | null;
                 token: string;
@@ -37,6 +40,7 @@ export const userSlice = createSlice({
                 friendIds?: string[]; // optionnel, pas toujours dans la réponse signin
             }>,
         ) => {
+            state.value._id      = action.payload._id ?? null; 
             state.value.username = action.payload.username;
             state.value.token = action.payload.token;
             state.value.email = action.payload.email;
@@ -46,6 +50,7 @@ export const userSlice = createSlice({
         },
         logout: (state) => {
             state.value = {
+                _id: null, 
                 username: null,
                 email: null,
                 token: null,

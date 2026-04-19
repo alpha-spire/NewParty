@@ -3,9 +3,9 @@ import {
     Text,
     View,
     TextInput,
-    GestureResponderEvent,
     Image,
     Alert,
+    ActivityIndicator,
 } from "react-native";
 import React, { useState } from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
@@ -285,13 +285,16 @@ export default function CreateEventScreen({
                     </View>
                 </View>
 
-                {/* Bouton création */}
-                <Button
-                    colour="green"
-                    size="m"
-                    text="Créer l'évènement"
-                    onPress={handleCreateEvent}
-                />
+                {isLoading ? (
+                    <ActivityIndicator size="large" color="#92ff2d" style={styles.loader} />
+                ) : (
+                    <Button
+                        colour="green"
+                        size="m"
+                        text="Créer l'évènement"
+                        onPress={handleCreateEvent}
+                    />
+                )}
             </View>
         </View>
     );
@@ -300,9 +303,10 @@ export default function CreateEventScreen({
 const styles = StyleSheet.create({
     container: {
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "flex-start",
         backgroundColor: "#202020",
         height: "100%",
+        paddingTop: 20,
     },
     header: {
         flexDirection: "row",
@@ -313,11 +317,14 @@ const styles = StyleSheet.create({
         width: "100%",
     },
     title: {
-        marginTop: -200,
         fontSize: 25,
         fontWeight: "bold",
         textAlign: "center",
         color: "white",
+        marginBottom: 10,
+    },
+    loader: {
+        marginVertical: 30,
     },
     input: {
         fontSize: 20,

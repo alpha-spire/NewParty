@@ -6,6 +6,7 @@ import {
     Image,
     TouchableOpacity,
     Alert,
+    ActivityIndicator,
 } from "react-native";
 import React, { useState } from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
@@ -16,7 +17,7 @@ import PhotoModal from "./PhotoModal";
 import { BACKENDADRESS } from "../../config";
 import { useDispatch, useSelector } from "react-redux";
 import { useEventState, removeEvent } from "../../reducers/event";
-import { UserState } from "../../reducers/user";
+import { removeEventId, UserState } from "../../reducers/user";
 import Header from "../headers/Header";
 import DateTimePicker, {
     DateTimePickerEvent,
@@ -31,40 +32,42 @@ type ModifyEventScreenProps = {
 export default function ModifyEventScreen({
     navigation,
 }: ModifyEventScreenProps) {
-    // États pour la gestion des inputs de l'évènement
+    const dispatch = useDispatch();
+    const currentEvent = useEventState();
+    const user = useSelector((state: { user: UserState }) => state.user.value);
+
+    // États initialisés depuis l'event courant
     const [title, setTitle] = useState("");
     const [location, setLocation] = useState("");
     const [photo, setPhoto] = useState<string>("");
-    const [memberIds, setMemberIds] = useState<string[]>([]);
-    // États pour la gestion des dates et heures de l'évènement
-    const [startDate, setStartDate] = useState<Date>(new Date());
-    const [startHour, setStartHour] = useState<Date>(new Date());
-    const [endDate, setEndDate] = useState<Date>(new Date());
+    const [memberIds, setMemberIds] = useState<string[]>(
+        currentEvent ? currentEvent.memberIds.map((m) => m._id) : []
+    );
+    const [startDate, setStartDate] = useState<Date>(
+        currentEvent ? new Date(currentEvent.startDate) : new Date()
+    );
+    const [startHour, setStartHour] = useState<Date>(
+        currentEvent ? new Date(currentEvent.startHour) : new Date()
+    );
+    const [endDate, setEndDate] = useState<Date>(
+        currentEvent ? new Date(currentEvent.endDate) : new Date()
+    );
     const [endHour, setEndHour] = useState<Date>(new Date());
-    // États pour la gestion des modals et du date picker
     const [isFriendsModalOpened, setIsFriendsModalOpened] = useState(false);
     const [isPhotoModalOpened, setIsPhotoModalOpened] = useState(false);
-    // États pour la gestion du date picker
     const [visible, setVisible] = useState(false);
     const [date, setDate] = useState(new Date());
     const [mode, setMode] = useState<"date" | "time">("date");
     const [typeDate, setTypeDate] = useState<
         "startDate" | "endDate" | "startHour" | "endHour" | null
     >(null);
-
-    // États de chargement
     const [isUpdating, setIsUpdating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const dispatch = useDispatch();
-
-    // Récupération de l'évènement courant et des données utilisateur depuis le store Redux
-    const currentEvent = useEventState();
     if (!currentEvent) {
         navigation.goBack();
         return null;
     }
-    const user = useSelector((state: { user: UserState }) => state.user.value);
 
     const showDate = () => {
         setMode("date");
@@ -143,7 +146,8 @@ export default function ModifyEventScreen({
                             );
                             const data = await response.json();
                             if (data.result) {
-                                dispatch(removeEvent()); // retire l'event du reducer user
+                                dispatch(removeEvent()); // reducer event
+                                dispatch(removeEventId(currentEvent._id)); //reducer user
                                 navigation.navigate("TabNavigator", {
                                     screen: "Events",
                                 });
@@ -180,7 +184,7 @@ export default function ModifyEventScreen({
         }
         setIsUpdating(true);
         try {
-            const response = await fetch(BACKENDADRESS + "/events/update", {
+            const response = await fetch(BACKENDADRESS + `/events/update/${currentEvent._id}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -327,21 +331,27 @@ export default function ModifyEventScreen({
                     </View>
                 </View>
 
-                {/* Bouton modification event */}
-                <Button
-                    colour="blue"
-                    size="m"
-                    text="Modifier"
-                    onPress={handleModifyEvent}
-                />
+                {isUpdating ? (
+                    <ActivityIndicator size="large" color="#4a90e2" style={styles.loader} />
+                ) : (
+                    <Button
+                        colour="blue"
+                        size="m"
+                        text="Modifier"
+                        onPress={handleModifyEvent}
+                    />
+                )}
 
-                {/* Bouton suppression event*/}
-                <Button
-                    colour="red"
-                    size="m"
-                    text="Supprimer"
-                    onPress={handleDeleteEvent}
-                />
+                {isDeleting ? (
+                    <ActivityIndicator size="large" color="red" style={styles.loader} />
+                ) : (
+                    <Button
+                        colour="red"
+                        size="m"
+                        text="Supprimer"
+                        onPress={handleDeleteEvent}
+                    />
+                )}
             </View>
         </View>
     );
@@ -459,5 +469,8 @@ const styles = StyleSheet.create({
     datePlusHour: {
         flexDirection: "row",
         marginBottom: 40,
+    },
+    loader: {
+        marginVertical: 30,
     },
 });

@@ -5,18 +5,23 @@ import {
     TextInput,
     FlatList,
     Image,
+    TouchableOpacity,
+    Alert,
+    ActivityIndicator,
     Button,
 } from "react-native";
 import React, { useEffect } from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
-import { AddButton } from "../../ui/addButton";
-import { DeleteButton } from "../../ui/deleteButton";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { UserState, addFriend, removeFriend } from "../../reducers/user";
 import { BACKENDADRESS } from "../../config";
 import Header from "../headers/Header";
 import { User } from "../../types/user";
+import { useGetFriends } from "../../hooks/useGetFriends";
+import EvilIcons from "@expo/vector-icons/EvilIcons";
+import { AntDesign } from "@expo/vector-icons";
+
 
 type UserScreenProps = {
     navigation: NavigationProp<ParamListBase>;
@@ -24,43 +29,55 @@ type UserScreenProps = {
 
 export default function FriendsScreen({ navigation }: UserScreenProps) {
     const dispatch = useDispatch();
-    const [newFriendName, setNewFriendName] = useState<string>("");
-    const [oldFriendName, setOldFriendName] = useState<string>("");
-    const [users, setUsers] = useState<User[]>([]);
-    const [friendsList, setFriendsList] = useState<User[]>([]);
-    const [addError, setAddError] = useState<string | null>(null);
-    const [removeError, setRemoveError] = useState<string | null>(null);
-
     const user = useSelector((state: { user: UserState }) => state.user.value);
 
-    useEffect(() => {
-        const fetchUsersList = async () => {
-            try {
-                const response = await fetch(BACKENDADRESS + "/users");
-                const data = await response.json();
-                setUsers(data.users);
-            } catch (error) {
-                console.error("Erreur de récupération des users", error);
+    // Hook — charge la liste d'amis depuis le backend
+    const { friends, isLoading, error } = useGetFriends();
+
+    const [searchUsername, setSearchUsername] = useState<string>("");
+    const [searchResult, setSearchResult] = useState<User | null>(null);
+
+    const [isAlreadyFriend, setIsAlreadyFriend] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+
+    // État de chargement pour add/remove
+    const [loadingFriendId, setLoadingFriendId] = useState<string | null>(null);
+
+    // Recherche un user par username exact
+    const handleSearch = async () => {
+        if (!searchUsername.trim()) return;
+
+        try {
+            const response = await fetch(
+                BACKENDADRESS + "/users/search/" + `${searchUsername.trim()}`,
+                {
+                    headers: { Authorization: `Bearer ${user.token}` },
+                },
+            );
+            if (!response.ok) {
+                console.error("Erreur fetch search friends:", response.status);
+                return;
             }
-        };
-        fetchUsersList();
-    }, []);
 
-    const handleAddFriend = async () => {
-        if (!newFriendName) return;
-        setAddError(null);
-
-        const friend = users.find((user) => user.username === newFriendName);
-
-        if (!friend) {
-            setAddError("Cet utilisateur n'existe pas.");
-            return;
+            const data = await response.json();
+            if (!data.result) {
+                setSearchError("Aucun utilisateur trouvé");
+                return;
+            }
+            setSearchResult(data.user);
+            setIsAlreadyFriend(data.isAlreadyFriend); // backend indique si déjà ami
+        } catch (error) {
+            setSearchError("Erreur réseau");
+            console.error("Search error:", error);
+        } finally {
+            setIsSearching(false);
         }
+    };
 
-        if (friendsList.includes(friend)) {
-            setAddError("Cet utilisateur est déjà dans votre liste d'amis.");
-            return;
-        }
+    //Ajoute un ami dans la liste des amis
+    const handleAddFriend = async (friend : User) => {
+        setLoadingFriendId(friend._id);
 
         try {
             const response = await fetch(BACKENDADRESS + "/users/update", {
@@ -71,125 +88,192 @@ export default function FriendsScreen({ navigation }: UserScreenProps) {
                 },
                 body: JSON.stringify({ friendId: friend._id }),
             });
+            
+            const data = await response.json()
             if (!response.ok) {
-                throw new Error(`Erreur serveur : ${response.status}`);
+                Alert.alert("Erreur", data.error || "Impossible d'ajouter l'ami");
+                return;
             }
-            setFriendsList([...friendsList, friend]);
+
             dispatch(addFriend(friend._id));
-            setNewFriendName("");
+         setSearchResult(null);  //  reset la recherche
+        setSearchUsername("");
+         Alert.alert("Succès", `${friend.username} ajouté à vos amis !`);
         } catch (error) {
-            setAddError("Une erreur est survenue lors de l'ajout.");
-            console.error("Erreur ajout ami", error);
+            Alert.alert("Erreur", "Erreur réseau");
+            console.error("Add friend error:", error);
         }
     };
 
-    const handleRemoveFriend = async () => {
-        if (!oldFriendName) {
-            return;
-        }
+    //Supprime un ami avec confirmation
+    const handleRemoveFriend = async (friend : User) => {
+Alert.alert(
+            "Supprimer un ami",
+            `Retirer ${friend.username} de vos amis ?`,
+            [
+                { text: "Annuler", style: "cancel" },
+                {
+                    text: "Supprimer",
+                    style: "destructive",
+                    onPress: async () => {
+                        setLoadingFriendId(friend._id);
+                        try {
+                        const response = await fetch(
 
-        const friend = users.find((user) => user.username === oldFriendName);
+                            
+                                BACKENDADRESS + "/users/update",
+                                {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        Authorization: `Bearer ${user.token}`,
+                                    },
+                                    body: JSON.stringify({
+                                        friendId: friend._id,
+                                        remove: true, // flag pour indiquer une suppression
+                                    }),
+                                }
+                            );
 
-        if (!friend) {
-            setRemoveError("Cet utilisateur n'existe pas.");
-            return;
-        }
+                            const data = await response.json();
 
-        if (!friendsList.includes(friend)) {
-            setRemoveError(
-                "Cet utilisateur n'est pas dans votre liste d'amis.",
-            );
-            return;
-        }
-        try {
-            const response = await fetch(BACKENDADRESS + "/users/update", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${user.token}`,
-                },
-                body: JSON.stringify({
-                    friendId: friend._id,
-                    remove: true,
-                }),
-            });
-            if (!response.ok) {
-                throw new Error(`Erreur serveur : ${response.status}`);
+                            if (!response.ok) {
+                                Alert.alert("Erreur", data.error || "Impossible de supprimer");
+                                return;
+                            }
+
+                            dispatch(removeFriend(friend._id));
+                        } catch (error) {
+                            Alert.alert("Erreur", "Erreur réseau");
+                            console.error("Remove friend error:", error);
+                        } finally {
+                            setLoadingFriendId(null);
+                    }
+                }
             }
-            setFriendsList(friendsList.filter((e) => e._id !== friend._id));
-
-            dispatch(removeFriend(friend._id));
-
-            setOldFriendName("");
-        } catch (error) {
-            setRemoveError("Une erreur est survenue lors de la suppression.");
-            console.error("Erreur suppression ami", error);
-        }
+            ]
+        );
     };
+
+
 
     return (
         <View style={styles.screen}>
+            {/* Header */}
             <View style={styles.header}>
                 <Header destination={"Events"} goBack={false} />
             </View>
+
             <View style={styles.container}>
-                <Text style={styles.title}>Ma liste d'amis : </Text>
-                <FlatList
-                    style={styles.listPosition}
-                    data={friendsList}
-                    keyExtractor={(item) => item._id}
-                    renderItem={({ item }) => (
-                        <View style={styles.infosBox}>
-                            <Text style={styles.texte}>{item.username}</Text>
+
+                {/* ── SECTION RECHERCHE ── */}
+                <View style={styles.section}>
+                    <Text style={styles.title}>Rechercher une personne :</Text>
+                    <View style={styles.searchRow}>
+
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Nom d'utilisateur ..."
+                            placeholderTextColor="grey"
+                            onChangeText={(value) => {
+                                setSearchUsername(value),
+                                setSearchResult(null);  // reset résultat si on retape
+                                setSearchError(null);
+                            }}
+                            value={searchUsername}
+                            autoCapitalize="none"
+                                //  Lance la recherche quand on valide le clavier
+                                onSubmitEditing={handleSearch}
+                        />
+                        <TouchableOpacity
+                                style={styles.searchBtn}
+                                onPress={handleSearch}
+                            >
+                                {isSearching ? (
+                                    <ActivityIndicator color="white" />
+                                ) : (
+                                    <AntDesign name="search1" size={24} color="white" />
+                                )}
+                            </TouchableOpacity>
+
+                    </View>
+
+                    {/* Erreur de recherche */}
+                    {searchError && <Text style={styles.error}>{searchError}</Text>}
+
+                </View>
+
+                    {/* Résultat de la recherche */}
+                    {searchResult && (
+                        <View style={styles.searchResult}>
+                            {searchResult.userPhoto ? (
+                                <Image
+                                    style={styles.userPhoto}
+                                    source={{ uri: searchResult.userPhoto }}
+                                />
+                            ) : (<EvilIcons
+                                    style={styles.userIcon}
+                                    name="user"
+                                    size={60}
+                                    color="white"
+                                    />
+                            )}
+
+                            <Text style={styles.friendName}>{searchResult.username}</Text>
+
+                            {/* Bouton désactivé si déjà ami */}
+                            {isAlreadyFriend ? (
+                                <Text style={styles.alreadyFriend}>Déjà ami ✓</Text>
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.addBtn}
+                                    onPress={() => handleAddFriend(searchResult)}
+                                >
+                                    {loadingFriendId === searchResult._id ? (
+                                        <ActivityIndicator color="white" />
+                                    ) : (
+                                        <AntDesign name="adduser" size={24} color="white" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
                         </View>
                     )}
-                />
-                <Text style={styles.title}>Liste des utilisateurs : </Text>
-                <FlatList
-                    style={styles.listPosition}
-                    data={users}
-                    keyExtractor={(item) => item._id}
-                    renderItem={({ item }) => (
-                        <View style={styles.infosBox}>
-                            <Text style={styles.texte}>{item.username}</Text>
-                            <Image
-                                style={styles.userPhoto}
-                                source={{ uri: item.userPhoto }}
-                            />
-                        </View>
-                    )}
-                />
-                <Text style={styles.title}>Ajoute un ami </Text>
-                <View style={styles.formBlock}>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Nom de ton futur ami ..."
-                        placeholderTextColor="grey"
-                        onChangeText={(value) => {
-                            (setNewFriendName(value), setAddError(null));
-                        }}
-                        value={newFriendName}
-                    />
-                    {addError && <Text style={styles.error}>{addError}</Text>}
-                    <Button title="+" onPress={handleAddFriend} />
+
+                    {/* ── SECTION LISTE D'AMIS ── */}
+                <View style={styles.section}>
+                        <Text style={styles.title}>
+                            👥 Mes amis ({friends.length})
+                             </Text>
+                        <FlatList
+                        style={styles.listPosition}
+                        data={friends}
+                        keyExtractor={(item) => item._id}
+                        // Message si liste vide
+                            ListEmptyComponent={
+                                <Text style={styles.emptyText}>
+                                    Aucun ami pour le moment.{"\n"}
+                                    Recherche un utilisateur ci-dessus !
+                                </Text>
+                            }
+                        renderItem={({ item }) => (
+                            <View style={styles.infosBox}>
+                                <Text style={styles.texte}>{item.username}</Text>
+                            </View>
+                        )}
+                        />
                 </View>
-                <Text style={styles.title}>Supprime un ami </Text>
-                <View style={styles.formBlock}>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Nom de ton ancien ami ..."
-                        placeholderTextColor="grey"
-                        onChangeText={(value) => {
-                            (setOldFriendName(value), setRemoveError(null));
-                        }}
-                        value={oldFriendName}
-                    />
-                    {removeError && (
-                        <Text style={styles.error}>{removeError}</Text>
-                    )}
-                    <Button title="-" onPress={handleRemoveFriend} />
+
+                <View>
+                    {/* ── SECTION INVITATIONS (future) ── */}
+                    {/* Préparée pour les notifications futures */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>
+                        🔔 Invitations reçues (0)
+                    </Text>
                 </View>
-            </View>
+               
+
+                </View>
         </View>
     );
 }

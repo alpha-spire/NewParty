@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   input: {
     fontSize: 20,
     fontWeight: "bold",
-    textAlign: "center",
+    textAlign: "left",
     height: 40,
     margin: 15,
     borderWidth: 1,
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   locationInput: {
     fontSize: 20,
     fontWeight: "bold",
-    textAlign: "center",
+    textAlign: "left",
     height: 40,
     margin: 15,
     borderWidth: 1,

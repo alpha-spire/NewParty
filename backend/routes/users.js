@@ -102,7 +102,9 @@ router.get("/search/:username", auth, async (req, res) => {
         }
 
         // Vérifie si déjà ami
-        const isAlreadyFriend = req.user.friendIds.includes(foundUser._id);
+        const isAlreadyFriend = req.user.friendIds.some(
+            (id) => id.toString() === foundUser._id.toString()
+        );
 
         res.json({ result: true, user: foundUser, isAlreadyFriend });
     } catch (error) {
@@ -130,9 +132,11 @@ router.get("/friends", auth, async (req, res) => {
 
 //route POST UPDATE modifier les infos du user — protégé par auth-------------------------------------
 router.post("/update", auth, async (req, res) => {
-    const user = await User.findOne({ token: req.user.token }).select(
-        "+password",
-    );
+    const user = await User.findById(req.user._id).select("+password");
+
+    if (!user) {
+        return res.status(404).json({ result: false, error: "User not found" });
+    }
 
     const {
         username,
@@ -189,8 +193,8 @@ router.post("/update", auth, async (req, res) => {
     try {
         //si modifs présentes : MAJ BDD
         if (Object.keys(updateObj).length !== 0) {
-            const updateUser = await User.findOneAndUpdate(
-                { token: req.user.token },
+            const updateUser = await User.findByIdAndUpdate(
+                req.user._id,
                 updateObj,
                 {
                     new: true, //"new:true" remplace "returnDocument: after" dans les versions plus récentes de mongoose, pour retourner le document après la mise à jour, avec les modifications appliquées, au lieu du document avant la mise à jour

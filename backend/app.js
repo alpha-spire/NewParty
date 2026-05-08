@@ -11,7 +11,7 @@ var eventsRouter = require("./routes/events");
 var uploadRouter = require('./routes/upload');
 var photosRouter = require('./routes/photos');
 var messagesRouter = require('./routes/messages');
-
+var invitationsRouter = require('./routes/invitations');
 
 var app = express();
 
@@ -34,5 +34,6 @@ app.use("/events", eventsRouter);
 app.use('/upload', uploadRouter);
 app.use('/photos', photosRouter);
 app.use('/messages', messagesRouter);
+app.use('/invitations', invitationsRouter);
 
 module.exports = app;

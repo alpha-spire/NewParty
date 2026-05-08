@@ -10,33 +10,24 @@ export const useGetFriends = () => {
     const isFocused = useIsFocused();//hook renvoie `true` si l'écran est actif, `false` sinon.
 
     const [friends, setFriends] = useState<User[]>([]);
-    const [isLoading, setIsLoading] = useState(false); // état de chargement pour éviter les appels redondants
-    const [error, setError] = useState<string | null>(null); // état d'erreur pour la gestion des erreurs de fetch
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
     const user = useSelector((state: { user: UserState }) => state.user.value);
 
     useEffect(() => {
-        if(!isFocused || isLoading || error) return; // ne pas fetch si pas focus, déjà en chargement ou en erreur
-        if (!user.token) {  // si pas de token, on ne peut pas fetch les friends
-            setError("User not authenticated");
-            return;
-        }
+        if (!isFocused || !user.token) return;
         const fetchFriends = async () => {
             setIsLoading(true);
             setError(null);
             try {
-                const response = await fetch(
-                    BACKENDADRESS + "/users/friends",
-                    {
-                        headers: {
-                            Authorization: `Bearer ${user.token}`,  // envoi du token pour authentification
-                        },
-                    }
-                );
+                const response = await fetch(BACKENDADRESS + "/users/friends", {
+                    headers: { Authorization: `Bearer ${user.token}` },
+                });
                 if (!response.ok) {
-                    setError("Failed to fetch events");
+                    setError("Failed to fetch friends");
                     return;
                 }
-
                 const data = await response.json();
                 if (data.result) {
                     setFriends(data.friends);
@@ -47,10 +38,13 @@ export const useGetFriends = () => {
                 console.error("Erreur de récupération des amis", error);
                 setError("Failed to fetch friends");
             } finally {
-                setIsLoading(false); // refetch à chaque fois que l'écran devient actif
+                setIsLoading(false);
             }
         };
         fetchFriends();
-    }, [isFocused]);
-    return {friends, isLoading, error}; // on retourne un objet avec les données, l'état de chargement et l'erreur pour une utilisation plus flexible dans les composants   
+    }, [isFocused, refreshTrigger]);
+
+    const refetch = () => setRefreshTrigger((t) => t + 1);
+
+    return { friends, isLoading, error, refetch };
 };

@@ -19,6 +19,6 @@ export type Event = {
 export type EventWithUsers = Omit<Event, "adminId" | "memberIds"> & {
     // Omit prend Event et supprime adminId et memberIds
     // & fusionne le résultat de Omit avec un nouveau type qui contient les champs adminId et memberIds avec les types modifiés
-    adminId: Pick<User, "_id" | "username" | "userPhoto">; // pick créé un nouveau typeuniquement les champs populés dans le backend
+    adminId: Pick<User, "_id" | "username" | "userPhoto">; // pick créé un nouveau type : uniquement les champs populés dans le backend
     memberIds: Pick<User, "_id" | "username" | "userPhoto">[];
 };

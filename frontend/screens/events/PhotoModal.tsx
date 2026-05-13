@@ -25,19 +25,24 @@ export default function PhotoModal({
     const [imageURI, setImageURI] = useState<string>("");
 
     async function pickImageAsync() {
+        console.log("A. pickImageAsync lancé");
         const result = await ImagePicker.launchImageLibraryAsync({
             allowsEditing: false,
             quality: 1,
         });
 
+        console.log("B. résultat picker — canceled:", result.canceled);
         if (result.canceled) {
             Alert.alert("Info", "Aucune image sélectionnée");
         } else {
-            setImageURI(result.assets[0].uri);
+            const uri = result.assets[0].uri;
+            console.log("C. URI sélectionnée:", uri.substring(0, 60));
+            setImageURI(uri);
         }
     }
 
     const handleRegister = () => {
+        console.log("D. handleRegister appelé — imageURI:", imageURI ? imageURI.substring(0, 60) : "VIDE");
         if (!imageURI) {
             Alert.alert("Erreur", "Veuillez sélectionner une image");
             return;
@@ -54,7 +59,11 @@ export default function PhotoModal({
                 <Text style={styles.texte}>
                     Ajoute une photo de ta galerie de photos
                 </Text>
-                <Image style={styles.image} source={{ uri: imageURI }} />
+                {imageURI ? (
+                    <Image style={styles.image} source={{ uri: imageURI }} />
+                ) : (
+                    <View style={styles.image} />
+                )}
                 <TouchableOpacity style={styles.btn} onPress={pickImageAsync}>
                     <Text style={styles.btnTxt}>Ajouter une photo</Text>
                 </TouchableOpacity>

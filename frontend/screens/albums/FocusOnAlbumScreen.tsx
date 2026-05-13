@@ -1,10 +1,7 @@
-import { StyleSheet, Text, View, Image } from "react-native";
-import {
-    NavigationProp,
-    ParamListBase,
-    useIsFocused,
-} from "@react-navigation/native";
+import { StyleSheet, Text, View, Image, Alert, TouchableOpacity } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { Fontisto } from "@expo/vector-icons";
+import { AntDesign } from "@expo/vector-icons";
 import { FlatList } from "react-native";
 import { BACKENDADRESS } from "../../config";
 import { useSelector } from "react-redux";
@@ -12,106 +9,182 @@ import { useEventState } from "../../reducers/event";
 import { UserState } from "../../reducers/user";
 import { useEffect, useState } from "react";
 import { Photo } from "../../types/photo";
+import { User } from "../../types/user";
 import Header from "../headers/Header";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import PhotoModal from "../events/PhotoModal";
-import { Xbutton } from "../../ui/xButton";
 
-type UserScreenProps = {
-    navigation: NavigationProp<ParamListBase>;
+// Type étendu : _userId est populé par le backend (objet User au lieu d'un simple string)
+type PopulatedPhoto = Omit<Photo, "_userId"> & {
+    _userId: Pick<User, "_id" | "username" | "userPhoto">;
 };
 
-export default function FocusocusOnAlbum({ navigation }: UserScreenProps) {
+export default function FocusOnAlbum() {
+    // Récupère l'événement courant stocké dans Redux (sélectionné depuis AlbumsScreen)
     const currentAlbum = useEventState()!;
-    const [isPhotoModalOpened, setIsPhotoModalOpened] = useState(false);
     const user = useSelector((state: { user: UserState }) => state.user.value);
     const isFocused = useIsFocused();
-    const event = useEventState();
-    const [photos, setPhotos] = useState<Photo[]>([]);
 
+    const [isPhotoModalOpened, setIsPhotoModalOpened] = useState(false);
+    const [photos, setPhotos] = useState<PopulatedPhoto[]>([]);
+
+    // Recharge les photos à chaque fois que l'écran devient actif
     useEffect(() => {
+        if (!isFocused) return;
+
         const fetchPhotoList = async () => {
             try {
                 const response = await fetch(
                     BACKENDADRESS + `/photos/${currentAlbum._id}`,
+                    { headers: { Authorization: `Bearer ${user.token}` } },
                 );
                 const data = await response.json();
-                setPhotos(data.photos);
+                // Le backend retourne "listPhotos" (et non "photos")
+                setPhotos(data.listPhotos ?? []);
             } catch (error) {
                 console.error("Erreur de récupération Photos", error);
             }
         };
         fetchPhotoList();
-    }, []);
+    }, [isFocused]);
 
+    // Uploade l'image puis crée une entrée Photo en base liée à l'événement
     const handleAddPhoto = async (imageURI: string) => {
-        const formData = new FormData();
-        //@ts-expect-error
-        formData.append("photoFromFront", {
-            uri: imageURI,
-            name: "photo.jpg",
-            type: "image/jpeg",
-        });
-        const response = await fetch(BACKENDADRESS+"/upload", {
-            method: "POST",
-            body: formData,
-        });
-        const data = await response.json();
-        if (data) {
-            fetch(BACKENDADRESS + `/photos/${user.token}`, {
+        try {
+            const formData = new FormData();
+            // @ts-expect-error — FormData sur React Native n'accepte pas le type objet nativement
+            formData.append("photoFromFront", {
+                uri: imageURI,
+                name: "photo.jpg",
+                type: "image/jpeg",
+            });
+
+            // Étape 1 : upload du fichier, récupération de l'URL Cloudinary
+            const uploadResponse = await fetch(BACKENDADRESS + "/upload", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    uri: data.photo.url,
-                    eventId: event!._id,
-                    date: data.photo.date,
-                }),
-            })
-                .then((response) => response.json())
-                .then((data) => {});
+                headers: { Authorization: `Bearer ${user.token}` },
+                body: formData,
+            });
+            const uploadData = await uploadResponse.json();
+
+            if (!uploadData.photo?.url) {
+                Alert.alert("Erreur", "Upload échoué");
+                return;
+            }
+
+            // Étape 2 : enregistrement de la photo en base avec l'URL et l'eventId
+            const saveResponse = await fetch(
+                BACKENDADRESS + `/photos/${currentAlbum._id}`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${user.token}`,
+                    },
+                    body: JSON.stringify({
+                        uri: uploadData.photo.url,
+                        eventId: currentAlbum._id,
+                        date: uploadData.photo.date,
+                    }),
+                },
+            );
+            const saveData = await saveResponse.json();
+            if (saveData.result) {
+                // Ajoute la nouvelle photo localement sans refetch complet
+                setPhotos((prev) => [...prev, saveData.photo]);
+            }
+        } catch (error) {
+            Alert.alert("Erreur", "Impossible d'ajouter la photo");
+            console.error("Erreur ajout photo", error);
         }
     };
 
-    // const handleDeletePhoto = async (photo: Photo) => {
-    //     const response = await fetch(
-    //         BACKENDADRESS + `/photos/delete/${user.token}`,
-    //         { method: "DELETE", body: photo._id },
-    //     );
+    // Supprime une photo après confirmation — autorisé à l'auteur ou à l'admin de l'événement
+    const handleDeletePhoto = (photo: PopulatedPhoto) => {
+        Alert.alert(
+            "Supprimer la photo",
+            "Voulez-vous supprimer cette photo définitivement ?",
+            [
+                { text: "Annuler", style: "cancel" },
+                {
+                    text: "Supprimer",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const response = await fetch(
+                                BACKENDADRESS + `/photos/delete/${photo._id}`,
+                                {
+                                    method: "DELETE",
+                                    headers: {
+                                        Authorization: `Bearer ${user.token}`,
+                                    },
+                                },
+                            );
+                            const data = await response.json();
+                            if (data.result) {
+                                // Retire la photo de la liste locale sans refetch
+                                setPhotos((prev) =>
+                                    prev.filter((p) => p._id !== photo._id),
+                                );
+                            } else {
+                                Alert.alert("Erreur", data.error || "Suppression impossible");
+                            }
+                        } catch (error) {
+                            Alert.alert("Erreur", "Erreur réseau");
+                            console.error("Erreur suppression photo", error);
+                        }
+                    },
+                },
+            ],
+        );
+    };
 
-    //     const data = await response.json();
-    //     if (data) {
-    //         console.log(data);
-    //     }
-    // };
+    // Renvoie true si l'utilisateur connecté peut supprimer cette photo :
+    // soit il en est l'auteur, soit il est admin de l'événement
+    const canDelete = (photo: PopulatedPhoto): boolean => {
+        const isAuthor = photo._userId._id === user._id;
+        const isEventAdmin = currentAlbum.adminId._id === user._id;
+        return isAuthor || isEventAdmin;
+    };
 
     return (
-        <View>
+        <View style={styles.screen}>
             <View style={styles.header}>
                 <Header destination={"Album"} goBack={true} />
             </View>
+
             <View style={styles.container}>
+                {/* Barre sous le header : titre de l'album + bouton ajout photo */}
                 <View style={styles.underHeader}>
-                    <View>
-                        <Text style={styles.title}>{currentAlbum.title}</Text>
-                    </View>
+                    <Text style={styles.title}>{currentAlbum.title}</Text>
                     <MaterialIcons
-                        style={styles.photos}
+                        style={styles.addPhotoBtn}
                         name="add-a-photo"
                         size={40}
                         color="white"
                         onPress={() => setIsPhotoModalOpened(true)}
                     />
-                    <PhotoModal
-                        onClose={() => setIsPhotoModalOpened(false)}
-                        visible={isPhotoModalOpened}
-                        addPhoto={handleAddPhoto}
-                    />
                 </View>
+
+                {/* Modal de sélection / prise de photo */}
+                <PhotoModal
+                    onClose={() => setIsPhotoModalOpened(false)}
+                    visible={isPhotoModalOpened}
+                    addPhoto={handleAddPhoto}
+                />
+
+                {/* Grille 3 colonnes des photos de l'album */}
                 <FlatList
                     numColumns={3}
                     style={styles.listPosition}
                     data={photos}
                     keyExtractor={(item) => item._id}
+                    ListEmptyComponent={
+                        <Text style={styles.emptyText}>
+                            Aucune photo pour le moment.{"\n"}
+                            Appuie sur l'appareil photo pour en ajouter !
+                        </Text>
+                    }
                     renderItem={({ item }) => (
                         <View style={styles.photoBox}>
                             {item.uri ? (
@@ -121,22 +194,26 @@ export default function FocusocusOnAlbum({ navigation }: UserScreenProps) {
                                 />
                             ) : (
                                 <Fontisto
-                                    style={styles.photos}
+                                    style={styles.photoPlaceholder}
                                     name="photograph"
                                     size={60}
                                     color={"white"}
-                                    bottom={30}
                                 />
                             )}
 
-                            {/* <View style={styles.infosBox}>
-                                <Text style={styles.eventInfos}>
-                                    {item.title}
-                                </Text>
-                                <Text style={styles.eventInfos}>
-                                    {item.startDate.slice(0, 10)}
-                                </Text>
-                            </View> */}
+                            {/* Bouton poubelle — visible uniquement si l'user est autorisé */}
+                            {canDelete(item) && (
+                                <TouchableOpacity
+                                    style={styles.deleteBtn}
+                                    onPress={() => handleDeletePhoto(item)}
+                                >
+                                    <AntDesign
+                                        name="delete"
+                                        size={16}
+                                        color="white"
+                                    />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     )}
                 />
@@ -146,11 +223,9 @@ export default function FocusocusOnAlbum({ navigation }: UserScreenProps) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        alignItems: "flex-start",
-        justifyContent: "center",
+    screen: {
+        flex: 1,
         backgroundColor: "#1b1b1b",
-        height: "100%",
     },
     header: {
         flexDirection: "row",
@@ -160,67 +235,72 @@ const styles = StyleSheet.create({
         maxHeight: 125,
         width: "100%",
     },
-    underHeader: {
+    container: {
+        flex: 1,
         alignItems: "flex-start",
-        justifyContent: "center",
         backgroundColor: "#1b1b1b",
-        height: 100,
+    },
+    underHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "#1b1b1b",
+        height: 80,
         width: "100%",
+        paddingHorizontal: 15,
         borderBottomWidth: 0.2,
         borderColor: "white",
     },
     title: {
-        marginTop: 20,
-        marginLeft: 10,
         fontSize: 30,
         fontWeight: "bold",
         color: "white",
     },
-    photos: {
-        left: 275,
-        bottom: 30,
+    addPhotoBtn: {
         backgroundColor: "#323232",
-        width: 75,
-        height: 75,
+        width: 65,
+        height: 65,
         borderWidth: 2,
-        borderRadius: 25,
+        borderRadius: 20,
         borderColor: "white",
-        marginLeft: 10,
-        marginRight: 10,
-        padding: 15,
+        padding: 12,
+        textAlign: "center",
     },
     listPosition: {
-        height: "100%",
         width: "100%",
     },
+    // Cellule de la grille : 1/3 de largeur, hauteur fixe, position relative pour le bouton delete
     photoBox: {
         width: "33.3333333%",
-        display: "flex",
-        flexDirection: "row",
-        backgroundColor: "#1b1b1b",
-        borderTopColor: "white",
-        borderTopWidth: 0.5,
-        borderBottomWidth: 0.5,
-        borderBottomColor: "white",
-        // marginBottom: -37,
         height: 125,
-    },
-
-    infosBox: {
-        alignContent: "center",
-        marginTop: 10,
-    },
-    eventInfos: {
-        color: "grey",
-        fontSize: 15,
-        fontFamily: "",
-        // marginBottom: -1.75,
+        borderWidth: 0.5,
+        borderColor: "white",
+        backgroundColor: "#1b1b1b",
+        position: "relative",
     },
     updPhoto: {
         width: "100%",
         height: "100%",
-        borderWidth: 0.5,
-        borderColor: "white",
-        // marginTop: 10,
+    },
+    photoPlaceholder: {
+        flex: 1,
+        textAlign: "center",
+        textAlignVertical: "center",
+    },
+    // Pastille de suppression positionnée en bas à droite de la photo
+    deleteBtn: {
+        position: "absolute",
+        bottom: 6,
+        right: 6,
+        backgroundColor: "rgba(0,0,0,0.6)",
+        borderRadius: 12,
+        padding: 5,
+    },
+    emptyText: {
+        color: "grey",
+        textAlign: "center",
+        marginTop: 40,
+        fontSize: 15,
+        lineHeight: 22,
     },
 });

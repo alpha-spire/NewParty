@@ -56,7 +56,7 @@ router.get("/", auth, async (req, res) => {
         const listEvents = await Event.find({
             $or: [
                 { adminId: req.user._id },
-                { memberIds: req.user.id }, // identique à { memberIds: { $in: [req.user._id] } }
+                { memberIds: req.user._id },
             ],
         })
             .populate("adminId", "username userPhoto") // selection de l'essentiel (champ à peupler,champs à garder (projection))
@@ -110,7 +110,7 @@ router.get("/:id", auth, async (req, res) => {
 //route POST UPDATE : modifie l'event-------------------------------------------
 router.post("/update/:id", auth, async (req, res) => {
     try {
-        const event = await Event.findById(re.params._id);
+        const event = await Event.findById(req.params.id);
         if (!event) {
             return res
                 .status(404)

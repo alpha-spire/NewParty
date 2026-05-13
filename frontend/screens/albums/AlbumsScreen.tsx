@@ -1,8 +1,7 @@
-import { StyleSheet, Text, View, Image, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, Image, TouchableOpacity, FlatList } from "react-native";
 import React from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
 import { CreateButton } from "../../ui/createButton";
-import { FlatList } from "react-native";
 import { EventWithUsers } from "../../types/event";
 import { useDispatch } from "react-redux";
 import { addEvent } from "../../reducers/event";
@@ -17,23 +16,28 @@ type UserScreenProps = {
 export default function AlbumScreen({ navigation }: UserScreenProps) {
   const dispatch = useDispatch();
 
-  const events = useGetUserEvents();
+  // Récupère la liste des événements de l'utilisateur depuis l'API
+  const { events } = useGetUserEvents();
 
+  // Navigue vers l'écran de création d'album
   const handleCreateAlbum = () => {
     navigation.navigate("CreateAlbum");
   };
 
+  // Stocke l'événement sélectionné dans Redux puis navigue vers son album
   const handleFocusAlbum = (item: EventWithUsers) => {
     dispatch(addEvent(item));
     navigation.navigate("FocusOnAlbum");
   };
 
   return (
-    <View>
+    <View style={styles.screen}>
       <View style={styles.header}>
         <Header goBack={false} />
       </View>
+
       <View style={styles.container}>
+        {/* Barre sous le header : titre + bouton de création */}
         <View style={styles.underHeader}>
           <Text style={styles.title}>Mes albums</Text>
           <CreateButton
@@ -44,6 +48,7 @@ export default function AlbumScreen({ navigation }: UserScreenProps) {
           />
         </View>
 
+        {/* Grille 3 colonnes — chaque carte = un album lié à un événement */}
         <FlatList
           numColumns={3}
           style={styles.listPosition}
@@ -52,10 +57,9 @@ export default function AlbumScreen({ navigation }: UserScreenProps) {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.eventBox}
-              onPress={() => {
-                handleFocusAlbum(item);
-              }}
+              onPress={() => handleFocusAlbum(item)}
             >
+              {/* Photo de couverture ou icône par défaut */}
               {item.photoEventUrl ? (
                 <Image
                   style={styles.updPhoto}
@@ -67,10 +71,10 @@ export default function AlbumScreen({ navigation }: UserScreenProps) {
                   name="photograph"
                   size={60}
                   color={"white"}
-                  bottom={10}
                 />
               )}
 
+              {/* Titre tronqué à 10 caractères + date de début */}
               <View style={styles.infosBox}>
                 <Text style={styles.eventInfos}>{item.title.slice(0, 10)}</Text>
                 <Text style={styles.eventInfos}>
@@ -86,6 +90,10 @@ export default function AlbumScreen({ navigation }: UserScreenProps) {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#1b1b1b",
+  },
   container: {
     width: "100%",
     backgroundColor: "#1b1b1b",
@@ -119,9 +127,9 @@ const styles = StyleSheet.create({
     height: "100%",
     width: "100%",
   },
+  // Cellule de la grille : 1/3 de la largeur, bordures légères
   eventBox: {
     width: "33.333333%",
-    display: "flex",
     flexDirection: "column",
     backgroundColor: "#101010",
     borderTopColor: "white",
@@ -135,7 +143,6 @@ const styles = StyleSheet.create({
     padding: 15,
     paddingTop: 25,
   },
-
   infosBox: {
     alignContent: "center",
     marginTop: 10,
@@ -144,10 +151,10 @@ const styles = StyleSheet.create({
   eventInfos: {
     color: "grey",
     fontSize: 15,
-    fontFamily: "",
     marginBottom: -1.75,
     textAlign: "center",
   },
+  // Icône photograph affichée quand aucune photo n'est définie
   photos: {
     backgroundColor: "#323232",
     width: "100%",
@@ -156,7 +163,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     borderColor: "white",
     padding: 15,
-    marginTop: 10
+    marginTop: 10,
   },
   updPhoto: {
     width: "100%",
@@ -164,6 +171,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 25,
     borderColor: "white",
-    marginBottom:10
+    marginBottom: 10,
   },
 });

@@ -58,8 +58,8 @@ router.delete("/delete/:photoId", auth, async (req, res) => {
         const event = await Event.findById(photo.eventId);
         const isPhotoAuthor = photo._userId.equals(req.user._id);
         const isEventAdmin = event.adminId.equals(req.user._id);
-        if (!isEventAdmin && isPhotoAuthor) {
-            res.status(403).json({ result: false, error: "Access denied" });
+        if (!isPhotoAuthor && !isEventAdmin) {
+            return res.status(403).json({ result: false, error: "Access denied" });
         }
         // Suppression de la photo
         await Photo.deleteOne({ _id: req.params.photoId });

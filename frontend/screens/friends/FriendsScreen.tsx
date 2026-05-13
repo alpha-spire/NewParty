@@ -30,7 +30,7 @@ export default function FriendsScreen({ navigation }: UserScreenProps) {
     const user = useSelector((state: { user: UserState }) => state.user.value);
     const { invitations, setInvitations } = useGetInvitations();
 
-    const { friends, isLoading, error, refetch } = useGetFriends();
+    const { friends, refetch } = useGetFriends();
 
     const [searchUsername, setSearchUsername] = useState<string>("");
     const [searchResult, setSearchResult] = useState<User | null>(null);
@@ -114,7 +114,7 @@ export default function FriendsScreen({ navigation }: UserScreenProps) {
     const handleRespond = async (
         invitationId: string,
         accept: boolean,
-        sender: User,
+        sender: Pick<User, "_id" | "username" | "userPhoto">,
     ) => {
         try {
             const response = await fetch(
@@ -550,5 +550,19 @@ const styles = StyleSheet.create({
         backgroundColor: "#F44336",
         padding: 8,
         borderRadius: 10,
+    },
+    photoPlaceholder: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: "#444",
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 10,
+    },
+    photoInitial: {
+        color: "white",
+        fontSize: 18,
+        fontWeight: "bold",
     },
 });

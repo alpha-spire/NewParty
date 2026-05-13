@@ -18,10 +18,8 @@ router.post("/", auth, async (req, res) => {
                     { folder: "newparty_photos" }, // organiser les photos dans un dossier spécifique sur Cloudinary
                     (error, result) => {
                         // Gérer la réponse de Cloudinary : si erreur → reject, sinon → resolve avec le résultat
-                        if (error) {
-                            if (error) reject(error);
-                            else resolve(result);
-                        }
+                        if (error) reject(error);
+                        else resolve(result);
                     },
                 );
                 uploadStream.end(req.files.photoFromFront.data); // Envoie les données de la photo à Cloudinary

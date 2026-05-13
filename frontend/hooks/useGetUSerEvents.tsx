@@ -15,7 +15,7 @@ export const useGetUserEvents = () => {
     const user = useSelector((state: { user: UserState }) => state.user.value);
 
     useEffect(() => {
-        if(!isFocused || isLoading || error) return; // ne pas fetch si pas focus, déjà en chargement ou en erreur
+        if(!isFocused || isLoading) return; // ne pas fetch si pas focus ou déjà en chargement
         if (!user.token) {  // si pas de token, on ne peut pas fetch les events
             setError("User not authenticated");
             return;

@@ -7,10 +7,11 @@ import {
     TouchableOpacity,
     Alert,
     ActivityIndicator,
+    ScrollView,
 } from "react-native";
 import React, { useState } from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
-import { Button } from "../../ui/button";
+
 import { Fontisto, AntDesign } from "@expo/vector-icons";
 import FriendsModal from "./FriendsModal";
 import PhotoModal from "./PhotoModal";
@@ -22,7 +23,7 @@ import Header from "../headers/Header";
 import DateTimePicker, {
     DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import { formatDate, formatHour } from "../../utils/dateUtils";
+import { formatDateObj, formatHourObj, safeDate } from "../../utils/dateUtils";
 import { uploadPhoto } from "../../utils/uploadPhotoUtils";
 
 type ModifyEventScreenProps = {
@@ -44,13 +45,13 @@ export default function ModifyEventScreen({
         currentEvent ? currentEvent.memberIds.map((m) => m._id) : []
     );
     const [startDate, setStartDate] = useState<Date>(
-        currentEvent ? new Date(currentEvent.startDate) : new Date()
+        safeDate(currentEvent?.startDate)
     );
     const [startHour, setStartHour] = useState<Date>(
-        currentEvent ? new Date(currentEvent.startHour) : new Date()
+        safeDate(currentEvent?.startHour)
     );
     const [endDate, setEndDate] = useState<Date>(
-        currentEvent ? new Date(currentEvent.endDate) : new Date()
+        safeDate(currentEvent?.endDate)
     );
     const [endHour, setEndHour] = useState<Date>(new Date());
     const [isFriendsModalOpened, setIsFriendsModalOpened] = useState(false);
@@ -78,7 +79,7 @@ export default function ModifyEventScreen({
         setVisible(true);
     };
 
-    const dateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    const dateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
         const currentDate = selectedDate || date;
         setDate(currentDate);
         switch (typeDate) {
@@ -177,8 +178,15 @@ export default function ModifyEventScreen({
         if (startHour) updateObj.startHour = startHour.toISOString();
         if (endHour) updateObj.endHour = endHour.toISOString();
         if (photo) updateObj.photoEventUrl = photo;
+        // memberIds toujours inclus — représente l'état final de la liste des membres
+        updateObj.memberIds = memberIds;
 
-        if (Object.keys(updateObj).length === 0) {
+        const nonMemberKeys = Object.keys(updateObj).filter(k => k !== "memberIds");
+        const membersChanged =
+            memberIds.length !== currentEvent.memberIds.length ||
+            memberIds.some((id, i) => id !== currentEvent.memberIds[i]?._id);
+
+        if (nonMemberKeys.length === 0 && !membersChanged) {
             Alert.alert("Info", "Aucune modification effectuée");
             return;
         }
@@ -211,12 +219,17 @@ export default function ModifyEventScreen({
                 <Header destination={"Events"} goBack={true} />
             </View>
 
-            <View style={styles.container}>
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.container}
+                keyboardShouldPersistTaps="handled"
+            >
+
                 <Text style={styles.title}>Modification d'évènement</Text>
 
                 {/* Champ titre — placeholder = valeur actuelle de l'event */}
                 <TextInput
-                    style={styles.titleInput}
+                    style={styles.textInput}
                     placeholder={currentEvent.title}
                     placeholderTextColor="grey"
                     onChangeText={(value) => setTitle(value)}
@@ -226,35 +239,28 @@ export default function ModifyEventScreen({
                 {/* Photo et membres */}
                 <View style={styles.photoPlusFriends}>
                     {currentEvent.photoEventUrl ? (
-                        <TouchableOpacity
-                            onPress={() => setIsPhotoModalOpened(true)}
-                        >
-                            <Image
-                                style={styles.photos}
-                                source={{ uri: currentEvent.photoEventUrl }}
-                            />
+                        <TouchableOpacity onPress={() => setIsPhotoModalOpened(true)}>
+                            <Image style={styles.photos} source={{ uri: currentEvent.photoEventUrl }} />
                         </TouchableOpacity>
                     ) : (
                         <Fontisto
                             style={styles.photos}
                             name="photograph"
-                            size={95}
-                            color={"white"}
+                            size={80}
+                            color="white"
                             onPress={() => setIsPhotoModalOpened(true)}
                         />
                     )}
-
                     <PhotoModal
                         onClose={() => setIsPhotoModalOpened(false)}
                         visible={isPhotoModalOpened}
                         addPhoto={handleAddPhoto}
                     />
-
                     <AntDesign
                         style={styles.friends}
                         name="usergroup-add"
-                        size={105}
-                        color={"white"}
+                        size={80}
+                        color="white"
                         onPress={() => setIsFriendsModalOpened(true)}
                     />
                     <FriendsModal
@@ -268,89 +274,60 @@ export default function ModifyEventScreen({
 
                 {/* Champ localisation */}
                 <TextInput
-                    style={styles.locationInput}
+                    style={styles.textInput}
                     placeholder={currentEvent.location || "Lieu ..."}
                     placeholderTextColor="grey"
                     onChangeText={(value) => setLocation(value)}
                     value={location}
                 />
 
-                {/* Dates et heures */}
-                <View style={styles.datePlusHour}>
-                    <View style={styles.date}>
-                        <Text style={styles.texte}>Du </Text>
-                        <Text
-                            style={styles.input}
-                            onPress={() => {
-                                showDate();
-                                setTypeDate("startDate");
-                            }}
-                        >
-                            {formatDate(startDate.toISOString())}
+                {/* Dates et heures — deux lignes : début / fin */}
+                <View style={styles.datesBlock}>
+                    <View style={styles.dateRow}>
+                        <Text style={styles.label}>Début</Text>
+                        <Text style={styles.dateChip} onPress={() => { showDate(); setTypeDate("startDate"); }}>
+                            {formatDateObj(startDate)}
                         </Text>
-                        <Text style={styles.texte}>au</Text>
-                        <Text
-                            style={styles.input}
-                            onPress={() => {
-                                showDate();
-                                setTypeDate("endDate");
-                            }}
-                        >
-                            {formatDate(endDate.toISOString())}
+                        <Text style={styles.dateChip} onPress={() => { showTime(); setTypeDate("startHour"); }}>
+                            {formatHourObj(startHour)}
                         </Text>
                     </View>
-                    <View style={styles.hour}>
-                        <Text style={styles.texte}>De </Text>
-                        <Text
-                            style={styles.input}
-                            onPress={() => {
-                                showTime();
-                                setTypeDate("startHour");
-                            }}
-                        >
-                            {formatHour(startHour.toISOString())}
+                    <View style={styles.dateRow}>
+                        <Text style={styles.label}>Fin</Text>
+                        <Text style={styles.dateChip} onPress={() => { showDate(); setTypeDate("endDate"); }}>
+                            {formatDateObj(endDate)}
                         </Text>
-                        <Text style={styles.texte}>à</Text>
-                        <Text
-                            style={styles.input}
-                            onPress={() => {
-                                showTime();
-                                setTypeDate("endHour");
-                            }}
-                        >
-                            {formatHour(endHour.toISOString())}
+                        <Text style={styles.dateChip} onPress={() => { showTime(); setTypeDate("endHour"); }}>
+                            {formatHourObj(endHour)}
                         </Text>
-                        {visible && (
-                            <DateTimePicker
-                                value={date}
-                                mode={mode}
-                                is24Hour={true}
-                                onChange={dateChange}
-                            />
-                        )}
                     </View>
+                    {visible && (
+                        <DateTimePicker
+                            value={date}
+                            mode={mode}
+                            is24Hour={true}
+                            onChange={dateChange}
+                        />
+                    )}
                 </View>
 
-                {isUpdating ? (
-                    <ActivityIndicator size="large" color="#4a90e2" style={styles.loader} />
-                ) : (
-                    <Button
-                        colour="blue"
-                        size="m"
-                        text="Modifier"
-                        onPress={handleModifyEvent}
-                    />
-                )}
+            </ScrollView>
 
-                {isDeleting ? (
-                    <ActivityIndicator size="large" color="red" style={styles.loader} />
+            {/* Boutons fixés en bas — toujours visibles quelle que soit la hauteur du contenu */}
+            <View style={styles.footer}>
+                {isUpdating ? (
+                    <ActivityIndicator size="small" color="#4a90e2" />
                 ) : (
-                    <Button
-                        colour="red"
-                        size="m"
-                        text="Supprimer"
-                        onPress={handleDeleteEvent}
-                    />
+                    <TouchableOpacity style={styles.btnModify} onPress={handleModifyEvent}>
+                        <Text style={styles.btnText}>Modifier</Text>
+                    </TouchableOpacity>
+                )}
+                {isDeleting ? (
+                    <ActivityIndicator size="small" color="red" />
+                ) : (
+                    <TouchableOpacity style={styles.btnDelete} onPress={handleDeleteEvent}>
+                        <Text style={styles.btnText}>Supprimer</Text>
+                    </TouchableOpacity>
                 )}
             </View>
         </View>
@@ -358,10 +335,17 @@ export default function ModifyEventScreen({
 }
 
 const styles = StyleSheet.create({
-    screen: { flex: 1 },
+    screen: {
+        flex: 1,
+        backgroundColor: "#202020",
+    },
+    scroll: {
+        flex: 1,
+    },
     container: {
         alignItems: "center",
-        justifyContent: "center",
+        paddingTop: 10,
+        paddingBottom: 40,
         backgroundColor: "#202020",
     },
     header: {
@@ -374,103 +358,111 @@ const styles = StyleSheet.create({
     },
     title: {
         marginTop: 10,
-        fontSize: 25,
+        marginBottom: 10,
+        fontSize: 22,
         fontWeight: "bold",
         textAlign: "center",
         color: "white",
     },
-    titleInput: {
-        fontSize: 20,
-        fontWeight: "bold",
-        textAlign: "left",
-        height: 40,
-        margin: 15,
+    textInput: {
+        fontSize: 16,
+        height: 45,
+        marginVertical: 8,
         borderWidth: 1,
-        padding: 10,
+        paddingHorizontal: 14,
         backgroundColor: "#323232",
-        color: "grey",
-        borderColor: "white",
-        borderRadius: 17,
-        width: 290,
-    },
-    input: {
-        fontSize: 20,
-        fontWeight: "bold",
-        textAlign: "left",
-        height: 40,
-        margin: 15,
-        borderWidth: 1,
-        padding: 10,
-        backgroundColor: "#323232",
-        color: "grey",
-        borderColor: "white",
-        borderRadius: 17,
-        width: "90%",
-    },
-    locationInput: {
-        fontSize: 20,
-        fontWeight: "bold",
-        textAlign: "left",
-        height: 40,
-        margin: 15,
-        borderWidth: 1,
-        padding: 10,
-        backgroundColor: "#323232",
-        color: "grey",
-        borderColor: "white",
-        borderRadius: 17,
-        width: 290,
-    },
-    texte: {
-        fontSize: 20,
-        fontWeight: "bold",
-        textAlign: "center",
         color: "white",
+        borderColor: "white",
+        borderRadius: 17,
+        width: "88%",
     },
     photoPlusFriends: {
         flexDirection: "row",
+        marginVertical: 12,
     },
     photos: {
         backgroundColor: "#323232",
-        width: 140,
-        height: 140,
+        width: 120,
+        height: 120,
         borderWidth: 2,
-        borderRadius: 25,
+        borderRadius: 20,
         borderColor: "white",
-        marginLeft: 10,
-        marginRight: 10,
-        padding: 15,
+        marginHorizontal: 10,
+        padding: 18,
     },
     friends: {
         backgroundColor: "#323232",
-        width: 140,
-        height: 140,
+        width: 120,
+        height: 120,
         borderWidth: 2,
-        borderRadius: 25,
+        borderRadius: 20,
         borderColor: "white",
-        marginLeft: 10,
-        marginRight: 10,
-        padding: 15,
+        marginHorizontal: 10,
+        padding: 18,
     },
-    date: {
-        width: 140,
-        height: 140,
-        marginLeft: 10,
-        marginRight: 10,
-        padding: 15,
+    // Bloc dates/heures — deux lignes : Début et Fin
+    datesBlock: {
+        width: "88%",
+        marginVertical: 12,
     },
-    hour: {
-        width: 140,
-        height: 140,
-        marginLeft: 10,
-        marginRight: 10,
-        padding: 15,
-    },
-    datePlusHour: {
+    dateRow: {
         flexDirection: "row",
-        marginBottom: 40,
+        alignItems: "center",
+        marginBottom: 10,
+    },
+    label: {
+        color: "white",
+        fontWeight: "bold",
+        fontSize: 15,
+        width: 50,
+    },
+    // Chip cliquable affichant une date ou une heure
+    dateChip: {
+        backgroundColor: "#323232",
+        color: "white",
+        borderWidth: 1,
+        borderColor: "white",
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        fontSize: 15,
+        marginHorizontal: 6,
+        overflow: "hidden",
     },
     loader: {
-        marginVertical: 30,
+        marginVertical: 20,
+    },
+    footer: {
+        flexDirection: "row",
+        justifyContent: "space-evenly",
+        alignItems: "center",
+        paddingVertical: 10,
+        backgroundColor: "#202020",
+        borderTopWidth: 0.2,
+        borderTopColor: "white",
+    },
+    btnModify: {
+        backgroundColor: "#4a90e2",
+        paddingVertical: 10,
+        paddingHorizontal: 24,
+        borderRadius: 25,
+        borderWidth: 1,
+        borderColor: "white",
+        opacity: 0.85,
+    },
+    btnDelete: {
+        backgroundColor: "red",
+        paddingVertical: 10,
+        paddingHorizontal: 24,
+        borderRadius: 25,
+        borderWidth: 1,
+        borderColor: "white",
+        opacity: 0.85,
+    },
+    btnText: {
+        color: "white",
+        fontSize: 16,
+        fontWeight: "bold",
+        textAlign: "center",
     },
 });

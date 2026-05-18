@@ -17,7 +17,6 @@ export default function CreateAlbumScreen() {
 
   // Envoie la photo au backend et stocke l'URL Cloudinary retournée
   const handleAddPhoto = async (imageURI: string) => {
-    console.log("1. handleAddPhoto appelé, imageURI:", imageURI ? imageURI.substring(0, 60) : "VIDE");
     try {
       const formData = new FormData();
       // @ts-expect-error — FormData sur React Native n'accepte pas le type objet nativement
@@ -27,16 +26,13 @@ export default function CreateAlbumScreen() {
         type: "image/jpeg",
       });
 
-      console.log("2. FormData créé, envoi vers:", BACKENDADRESS + "/upload");
       const response = await fetch(BACKENDADRESS + "/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${user.token}` },
         body: formData,
       });
 
-      console.log("3. Réponse reçue, status:", response.status);
       const data = await response.json();
-      console.log("4. Upload response:", JSON.stringify(data));
 
       if (!response.ok || !data.result) {
         Alert.alert("Erreur", data.error || "Upload échoué");

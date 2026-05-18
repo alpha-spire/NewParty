@@ -57,21 +57,21 @@ export default function FriendsModal({
     }, [visible]);
 
 
-    const friendsList = friends.map((user) => (
-        <View key={user._id} style={styles.friend}>
-            <Text style={styles.texte}>{user.username}</Text>
+    const friendsList = friends.map((friend) => (
+        <View key={friend._id} style={styles.friend}>
+            <Text style={styles.texte}>{friend.username}</Text>
             <BouncyCheckbox
                 size={25}
                 fillColor="red"
                 unFillColor="#FFFFFF"
-                isChecked={memberIds.includes(user._id)}
+                isChecked={memberIds.includes(friend._id)}
                 iconStyle={{ borderColor: "red" }}
                 innerIconStyle={{ borderWidth: 2 }}
                 onPress={(isChecked: boolean) => {
                     if (isChecked) {
-                        addMember(user._id);
+                        addMember(friend._id);
                     } else {
-                        removeMember(user._id);
+                        removeMember(friend._id);
                     }
                 }}
             />

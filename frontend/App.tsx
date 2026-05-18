@@ -87,7 +87,6 @@ const TabNavigator = () => {
       <Tab.Screen name="Friends" component={FriendsScreen} />
     </Tab.Navigator>
   );
-  0;
 };
 
 export default function App() {

@@ -9,6 +9,7 @@ export type Event = {
     startDate: string;
     endDate: string;
     startHour: string;
+    endHour: string;
     isPrivate: boolean;
     adminId: string;
     memberIds: string[];

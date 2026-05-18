@@ -1,8 +1,6 @@
-import React from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { CameraView, Camera, CameraType, FlashMode } from "expo-camera";
-import { useEffect } from "react";
-import { useState, useRef } from "react";
 import { useIsFocused } from "@react-navigation/native";
 import { BACKENDADRESS } from "../../config";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -10,29 +8,29 @@ import Entypo from "@expo/vector-icons/Entypo";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { UserState } from "../../reducers/user";
-import { useEventState } from "../../reducers/event";
 import EventModal from "./EventModal";
 
 type UserScreenProps = {
     navigation: NavigationProp<ParamListBase>;
 };
 
-export default function PhotospScreen({ navigation }: UserScreenProps) {
+export default function PhotosScreen(_: UserScreenProps) {
     const isFocused = useIsFocused();
     const [hasPermission, setHasPermission] = useState(false);
     const cameraRef = useRef<CameraView>(null);
     const [isEventModalOpened, setIsEventModalOpened] = useState(false);
     const [facing, setFacing] = useState<CameraType>("back");
     const [flash, setFlash] = useState<FlashMode>("off");
-    const user = useSelector((state: { user: UserState }) => state.user.value);
-    const event = useEventState();
     const [eventId, setEventId] = useState<string>("");
     const [title, setTitle] = useState<string[]>([]);
 
+    const user = useSelector((state: { user: UserState }) => state.user.value);
+
+    // Demande la permission caméra au montage
     useEffect(() => {
         (async () => {
             const result = await Camera.requestCameraPermissionsAsync();
-            setHasPermission(result && result?.status === "granted");
+            setHasPermission(result?.status === "granted");
         })();
     }, []);
 
@@ -50,34 +48,33 @@ export default function PhotospScreen({ navigation }: UserScreenProps) {
             const photo = await cameraRef.current?.takePictureAsync({
                 quality: 0.3,
             });
-
-            if (!photo) {
-                return;
-            }
+            if (!photo) return;
 
             const formData = new FormData();
-            //@ts-expect-error
+            // @ts-expect-error — FormData sur React Native n'accepte pas le type objet nativement
             formData.append("photoFromFront", {
                 uri: photo.uri,
                 name: "photo.jpg",
                 type: "image/jpeg",
             });
 
-            const response = await fetch(BACKENDADRESS + "/upload", {
+            // Étape 1 : upload vers Cloudinary
+            const uploadRes = await fetch(BACKENDADRESS + "/upload", {
                 method: "POST",
+                headers: { Authorization: `Bearer ${user.token}` },
                 body: formData,
             });
+            const uploadData = await uploadRes.json();
+            if (!uploadData.result || !uploadData.photo?.url) return;
 
-            const data = await response.json();
-
-            await fetch(BACKENDADRESS + `/photos/${user.token}`, {
+            // Étape 2 : sauvegarde de la photo dans l'événement (eventId dans l'URL)
+            await fetch(BACKENDADRESS + `/photos/${eventId}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    uri: data.photo.url,
-                    eventId,
-                    date: data.photo.date,
-                }),
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${user.token}`,
+                },
+                body: JSON.stringify({ uri: uploadData.photo.url }),
             });
 
             alert("Photo enregistrée !");
@@ -91,13 +88,14 @@ export default function PhotospScreen({ navigation }: UserScreenProps) {
         setEventId(eventIdChoise);
     };
 
+    // N'ajoute le titre que si aucun n'est déjà sélectionné (sélection unique)
     const handleAddTitle = (titleEvent: string) => {
         if (title.length === 0) {
-            setTitle([...title, titleEvent]);
+            setTitle([titleEvent]);
         }
     };
 
-    const handleRemoveTitle = (titleEvent: string) => {
+    const handleRemoveTitle = () => {
         setTitle([]);
     };
 
@@ -108,48 +106,52 @@ export default function PhotospScreen({ navigation }: UserScreenProps) {
             facing={facing}
             flash={flash}
         >
+            {/* Barre de contrôles : flash, choix d'évènement, retournement caméra */}
             <View style={styles.buttonContainer}>
                 <TouchableOpacity activeOpacity={0.8}>
                     <Entypo
                         name="flash"
                         size={30}
                         color="white"
-                        onPress={() => {
-                            setFlash(flash === "off" ? "on" : "off");
-                        }}
+                        onPress={() =>
+                            setFlash(flash === "off" ? "on" : "off")
+                        }
                     />
                 </TouchableOpacity>
+                {/* Bouton rouge — affiche le titre de l'évènement sélectionné en dessous */}
                 <TouchableOpacity
                     style={styles.chooseEvent}
                     activeOpacity={0.8}
                     onPress={() => setIsEventModalOpened(true)}
                 >
                     <Text style={styles.texte}>Choisis ton évènement :</Text>
+                    {title.length > 0 && (
+                        <Text style={styles.selectedTitle}>{title[0]}</Text>
+                    )}
                 </TouchableOpacity>
-                <Text style={styles.texte}>{title}</Text>
                 <TouchableOpacity activeOpacity={0.8}>
                     <FontAwesome
                         name="rotate-right"
                         size={30}
                         color="white"
-                        onPress={() => {
+                        onPress={() =>
                             setFacing((current) =>
                                 current === "back" ? "front" : "back",
-                            );
-                        }}
+                            )
+                        }
                     />
                 </TouchableOpacity>
             </View>
+
+            {/* Bouton déclencheur photo */}
             <View style={styles.snapContainer}>
-                <TouchableOpacity activeOpacity={0.8}>
-                    <TouchableOpacity
-                        style={styles.photoCircle}
-                        onPress={() => {
-                            cameraRef && takePicture();
-                        }}
-                    />
-                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.photoCircle}
+                    activeOpacity={0.8}
+                    onPress={takePicture}
+                />
             </View>
+
             <EventModal
                 onClose={() => setIsEventModalOpened(false)}
                 visible={isEventModalOpened}
@@ -158,7 +160,6 @@ export default function PhotospScreen({ navigation }: UserScreenProps) {
                 removeTitle={handleRemoveTitle}
                 title={title}
             />
-            <View></View>
         </CameraView>
     );
 }
@@ -192,6 +193,13 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: "white",
         padding: 5,
+    },
+    selectedTitle: {
+        color: "white",
+        fontWeight: "bold",
+        fontSize: 12,
+        marginTop: 3,
+        textAlign: "center",
     },
     photoCircle: {
         borderRadius: 50,

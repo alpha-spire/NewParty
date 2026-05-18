@@ -20,6 +20,7 @@ module.exports = async function (req, res, next) {
                 .status(403)
                 .json({ result: false, error: "Access denied" });
         }
+        next(); // accès autorisé → passe à la route suivante
     } catch (error) {
         return res.status(500).json({ result: false, error: "Server error" });
     }

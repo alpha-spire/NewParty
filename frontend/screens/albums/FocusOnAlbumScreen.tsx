@@ -90,8 +90,16 @@ export default function FocusOnAlbum() {
             );
             const saveData = await saveResponse.json();
             if (saveData.result) {
-                // Ajoute la nouvelle photo localement sans refetch complet
-                setPhotos((prev) => [...prev, saveData.photo]);
+                // Construit le PopulatedPhoto en ajoutant les infos user (saveData.photo._userId est un ObjectId brut)
+                const newPhoto: PopulatedPhoto = {
+                    ...saveData.photo,
+                    _userId: {
+                        _id: user._id!,
+                        username: user.username!,
+                        userPhoto: user.userPhoto,
+                    },
+                };
+                setPhotos((prev) => [...prev, newPhoto]);
             }
         } catch (error) {
             Alert.alert("Erreur", "Impossible d'ajouter la photo");

@@ -1,9 +1,5 @@
-import { StyleSheet, Text, View, TextInput, Image } from "react-native";
-import {
-    NavigationProp,
-    ParamListBase,
-    useIsFocused,
-} from "@react-navigation/native";
+import { StyleSheet, Text, View, TextInput, Image, Alert } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { FlatList } from "react-native";
 import { BACKENDADRESS } from "../../config";
 import { useSelector } from "react-redux";
@@ -11,100 +7,93 @@ import { useEventState } from "../../reducers/event";
 import { UserState } from "../../reducers/user";
 import React, { useEffect, useState } from "react";
 import { Message } from "../../types/message";
+import { User } from "../../types/user";
 import Header from "../headers/Header";
 import { SendButton } from "../../ui/sendButton";
-import { AddMemberButton } from "../../ui/addMemberButton";
 
-type UserScreenProps = {
-    navigation: NavigationProp<ParamListBase>;
+// _userId est populé par le backend (objet User au lieu d'un simple string)
+type PopulatedMessage = Omit<Message, "_userId"> & {
+    _userId: Pick<User, "_id" | "username" | "userPhoto">;
 };
 
-export default function FocusocusOnAlbum({ navigation }: UserScreenProps) {
+export default function ChatOnFocusScreen() {
     const currentEvent = useEventState()!;
     const user = useSelector((state: { user: UserState }) => state.user.value);
     const isFocused = useIsFocused();
-    const event = useEventState();
-    const [chat, setChat] = useState<Message[]>([]);
-    const [message, setMessage] = useState("");
-    const [userId, setUserId] = useState("");
-    // const [notUserId, setNotUserId] = useState("");
 
+    const [chat, setChat] = useState<PopulatedMessage[]>([]);
+    const [message, setMessage] = useState("");
+
+    // Récupère les messages et relance un polling toutes les 10s quand l'écran est actif
     useEffect(() => {
+        if (!isFocused) return;
+
         const fetchChatList = async () => {
             try {
                 const response = await fetch(
                     BACKENDADRESS + `/messages/${currentEvent._id}`,
+                    { headers: { Authorization: `Bearer ${user.token}` } },
                 );
                 const data = await response.json();
-                setChat(data.messages);
+                // Le backend retourne "chat" et non "messages"
+                if (data.result) setChat(data.chat);
             } catch (error) {
-                console.error("Erreur de récupération Message", error);
+                console.error("Erreur de récupération messages:", error);
             }
         };
-        const interval = setInterval(() => {
-            fetchChatList();
-        }, 10000);
+
         fetchChatList();
-        // (globalThis as any).fetchChatList = fetchChatList;
-        return () => clearInterval(interval);
-    }, [currentEvent._id]);
+        const interval = setInterval(fetchChatList, 10000);
+        return () => clearInterval(interval); // nettoyage à la désactivation de l'écran
+    }, [isFocused, currentEvent._id]);
 
-    const handleAddMessage = () => {
-        fetch(BACKENDADRESS + `/messages/${user.token}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                message: message,
-                eventId: event!._id,
-                date: new Date().toISOString(),
-            }),
-        })
-            .then((response) => response.json())
-            .then((data) => {
-                const fetchChatList = async () => {
-                    try {
-                        const response = await fetch(
-                            BACKENDADRESS + `/messages/${currentEvent._id}`,
-                        );
-                        const data = await response.json();
-                        setChat(data.messages);
-                    } catch (error) {
-                        console.error("Erreur de récupération Message", error);
-                    }
+    // Envoie un message et l'ajoute localement sans attendre le prochain polling
+    const handleAddMessage = async () => {
+        if (!message.trim()) return;
+        try {
+            const response = await fetch(
+                BACKENDADRESS + `/messages/${currentEvent._id}`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${user.token}`,
+                    },
+                    body: JSON.stringify({ message }),
+                },
+            );
+            const data = await response.json();
+            if (data.result) {
+                // Construit le message populé localement pour éviter un refetch immédiat
+                const newMessage: PopulatedMessage = {
+                    ...data.message,
+                    _userId: {
+                        _id: user._id!,
+                        username: user.username!,
+                        userPhoto: user.userPhoto,
+                    },
                 };
-                fetchChatList();
+                setChat((prev) => [...prev, newMessage]);
                 setMessage("");
-            });
+            }
+        } catch (error) {
+            Alert.alert("Erreur", "Impossible d'envoyer le message");
+            console.error("Erreur envoi message:", error);
+        }
     };
-
-    const getUserId = () => {
-        fetch(BACKENDADRESS + `/users/${user.token}`)
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.result) {
-                    setUserId(data.user._id);
-                }
-            });
-    };
-    getUserId();
-
-    const handleAddMember = () => {};
 
     return (
-        <View style={{ height: "100%" }}>
+        <View style={styles.screen}>
             <View style={styles.header}>
                 <Header destination={"Chat"} goBack={true} />
             </View>
+
             <View style={styles.container}>
                 <View style={styles.underHeader}>
                     <Text style={styles.title}>{currentEvent.title}</Text>
-                    <AddMemberButton
-                        colour="#1b1b1b"
-                        size="m"
-                        text="+"
-                        onPress={handleAddMember}
-                    />
                 </View>
+
+                {/* Liste inversée — le plus récent reste en bas */}
                 <FlatList
                     style={styles.listPosition}
                     data={chat.toReversed()}
@@ -112,50 +101,41 @@ export default function FocusocusOnAlbum({ navigation }: UserScreenProps) {
                     inverted
                     renderItem={({ item }) => (
                         <View>
-                            {userId === item._userId ? (
+                            {/* Bulle droite : message de l'utilisateur connecté */}
+                            {item._userId._id === user._id ? (
                                 <View style={styles.user}>
                                     <Text style={styles.userTexte}>
                                         {item.message}
                                     </Text>
                                     <Text style={styles.userDate}>
-                                        {item.date.slice(11, 16)}
+                                        {item.createdAt.slice(11, 16)}
                                     </Text>
                                 </View>
                             ) : (
+                                /* Bulle gauche : message d'un autre membre */
                                 <View style={styles.notUser}>
-                                    <Image
-                                        style={styles.userPhoto}
-                                        source={{
-                                            uri: event?.memberIds.find(
-                                                (member) => {
-                                                    return (
-                                                        member._id ===
-                                                        item._userId
-                                                    );
-                                                },
-                                            )?.userPhoto,
-                                        }}
-                                    />
+                                    {item._userId.userPhoto ? (
+                                        <Image
+                                            style={styles.userPhoto}
+                                            source={{ uri: item._userId.userPhoto }}
+                                        />
+                                    ) : null}
                                     <Text style={styles.member}>
-                                        {
-                                            event?.memberIds.find((member) => {
-                                                return (
-                                                    member._id === item._userId
-                                                );
-                                            })?.username
-                                        }
+                                        {item._userId.username}
                                     </Text>
                                     <Text style={styles.notUserTexte}>
                                         {item.message}
                                     </Text>
                                     <Text style={styles.notUserDate}>
-                                        {item.date.slice(11, 16)}
+                                        {item.createdAt.slice(11, 16)}
                                     </Text>
                                 </View>
                             )}
                         </View>
                     )}
                 />
+
+                {/* Zone de saisie */}
                 <View style={styles.footer}>
                     <TextInput
                         style={styles.input}
@@ -172,11 +152,15 @@ export default function FocusocusOnAlbum({ navigation }: UserScreenProps) {
 }
 
 const styles = StyleSheet.create({
+    screen: {
+        flex: 1,
+        backgroundColor: "#1b1b1b",
+    },
     container: {
+        flex: 1,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: "#1b1b1b",
-        flex: 1,
     },
     header: {
         flexDirection: "row",
@@ -202,17 +186,6 @@ const styles = StyleSheet.create({
         fontWeight: "bold",
         color: "white",
     },
-    photos: {
-        backgroundColor: "#323232",
-        width: 140,
-        height: 140,
-        borderWidth: 2,
-        borderRadius: 25,
-        borderColor: "white",
-        marginLeft: 10,
-        marginRight: 10,
-        padding: 15,
-    },
     userPhoto: {
         width: 30,
         height: 30,
@@ -222,39 +195,9 @@ const styles = StyleSheet.create({
     },
     listPosition: {
         width: "100%",
-        height: "100%",
+        flex: 1,
     },
-    photoBox: {
-        display: "flex",
-        flexDirection: "row",
-        backgroundColor: "#1b1b1b",
-        borderTopColor: "white",
-        borderTopWidth: 0.5,
-        marginBottom: -37,
-        width: 375,
-    },
-    userTexte: {
-        marginLeft: 10,
-        color: "black",
-        fontSize: 20,
-    },
-    notUserTexte: {
-        marginLeft: 10,
-        color: "white",
-        fontSize: 20,
-    },
-    userDate: {
-        color: "#4f4f4f",
-        fontSize: 12,
-        textAlign: "right",
-        marginRight: 10,
-    },
-    notUserDate: {
-        color: "grey",
-        fontSize: 12,
-        textAlign: "right",
-        marginRight: 10,
-    },
+    // Bulle de l'utilisateur connecté — droite, fond clair
     user: {
         marginRight: 10,
         marginLeft: "35%",
@@ -266,6 +209,18 @@ const styles = StyleSheet.create({
         borderColor: "white",
         padding: 5,
     },
+    userTexte: {
+        marginLeft: 10,
+        color: "black",
+        fontSize: 20,
+    },
+    userDate: {
+        color: "#4f4f4f",
+        fontSize: 12,
+        textAlign: "right",
+        marginRight: 10,
+    },
+    // Bulle des autres membres — gauche, fond sombre
     notUser: {
         marginLeft: 10,
         marginRight: "35%",
@@ -276,6 +231,17 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 0,
         borderColor: "grey",
         padding: 5,
+    },
+    notUserTexte: {
+        marginLeft: 10,
+        color: "white",
+        fontSize: 20,
+    },
+    notUserDate: {
+        color: "grey",
+        fontSize: 12,
+        textAlign: "right",
+        marginRight: 10,
     },
     member: {
         marginLeft: 10,
@@ -306,26 +272,5 @@ const styles = StyleSheet.create({
         backgroundColor: "white",
         borderRadius: 25,
         width: "80%",
-    },
-
-    infosBox: {
-        alignContent: "center",
-        marginTop: 10,
-    },
-    eventInfos: {
-        color: "grey",
-        fontSize: 15,
-        fontFamily: "",
-        marginBottom: -1.75,
-    },
-    updPhoto: {
-        width: 120,
-        height: 120,
-        borderWidth: 2,
-        borderRadius: 25,
-        borderColor: "white",
-        marginLeft: 10,
-        marginRight: 10,
-        marginTop: 10,
     },
 });

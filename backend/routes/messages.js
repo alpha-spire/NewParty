@@ -17,10 +17,10 @@ router.post("/:eventId", auth, checkEventAccess, async (req, res) => {
     try {
         // create message
         const newMessage = new Message({
-            _userId: req.user._id,  // on associe le message à l'utilisateur qui l'a créé grâce à son _id, que l'on récupère grâce au middleware auth qui a vérifié le token et ajouté l'objet user à la requête
+            _userId: req.user._id,
             message: message.trim(),
             eventId: req.params.eventId,
-            date: new Date(), // on enregistre la date de création du message pour pouvoir les trier ensuite dans le frontend, et afficher l'heure d'envoi du message, etc.
+            // date gérée automatiquement par timestamps: true (createdAt / updatedAt)
         });
         //MAJ bdd
         const savedmessage = await newMessage.save();

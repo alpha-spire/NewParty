@@ -5,7 +5,6 @@ export type Message = {
     _userId: string;
     message: string;
     eventId: string;
-    date: string;
     isEdited: boolean;
     isDeleted: boolean;
     createdAt: string;

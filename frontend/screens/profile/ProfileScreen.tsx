@@ -5,6 +5,7 @@ import {
     Image,
     TextInput,
     TouchableOpacity,
+    ScrollView,
 } from "react-native";
 import React from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
@@ -35,7 +36,6 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
 
     const user = useSelector((state: { user: UserState }) => state.user.value);
 
-    const [photo, setPhoto] = useState<string>("");
     const [email, setEmail] = useState("");
     const [username, setUsername] = useState("");
     const [oldPassword, setOldPassword] = useState("");
@@ -45,12 +45,12 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
     const [emailError, setEmailError] = useState(false);
     const [usernameError, setUsernameError] = useState(false);
     const [isPhotoModalOpened, setIsPhotoModalOpened] = useState(false);
-    const [text, onChangeText] = React.useState("Useless Text");
     const [isDeleteModalOpened, setIsDeleteModalOpened] = useState(false);
 
     const updateReduxUser = (data: User, token: string) => {
         dispatch(
             login({
+                _id: data._id,
                 email: data.email,
                 username: data.username,
                 token: token,
@@ -60,41 +60,46 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
     };
 
     const handleAddPhoto = async (imageURI: string) => {
-        const formData = new FormData();
-        //@ts-expect-error
-        formData.append("photoFromFront", {
-            uri: imageURI,
-            name: "photo.jpg",
-            type: "image/jpeg",
-        });
-        const res = await fetch(BACKENDADRESS + "/upload", {
-            method: "POST",
-            body: formData,
-        });
-        const data = await res.json();
-        if (data) {
-            const url = data.photo.url;
-            setPhoto(url);
+        try {
+            const formData = new FormData();
+            // @ts-expect-error — FormData sur React Native n'accepte pas le type objet nativement
+            formData.append("photoFromFront", {
+                uri: imageURI,
+                name: "photo.jpg",
+                type: "image/jpeg",
+            });
 
-            fetch(BACKENDADRESS + "/users/update", {
+            // Étape 1 : upload vers Cloudinary
+            const uploadRes = await fetch(BACKENDADRESS + "/upload", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${user.token}` },
+                body: formData,
+            });
+            const uploadData = await uploadRes.json();
+            if (!uploadData.result || !uploadData.photo?.url) {
+                return;
+            }
+            const url = uploadData.photo.url;
+
+            // Étape 2 : sauvegarde de l'URL en base
+            const updateRes = await fetch(BACKENDADRESS + "/users/update", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${user.token}`,
                 },
-                body: JSON.stringify({
-                    userPhoto: url,
-                }),
-            })
-                .then((response) => response.json())
-                .then((data) => {
-                    if (data.token) {
-                        updateReduxUser(data.user, data.token);
-                    }
-                })
-                .catch(console.error);
+                body: JSON.stringify({ userPhoto: url }),
+            });
+            const updateData = await updateRes.json();
+
+            // Étape 3 : mise à jour Redux avec la nouvelle photo
+            // /users/update retourne { user, result } — pas de token dans la réponse, on réutilise celui du store
+            if (updateData.result && updateData.user) {
+                updateReduxUser(updateData.user, user.token!);
+            }
+        } catch (error) {
+            console.error("Erreur ajout photo profil:", error);
         }
-        setPhoto("");
     };
 
     const handleModifiedUsername = () => {
@@ -114,8 +119,8 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
             })
                 .then((response) => response.json())
                 .then((data) => {
-                    if (data.token) {
-                        updateReduxUser(data.user, data.token);
+                    if (data.result && data.user) {
+                        updateReduxUser(data.user, user.token!);
                     }
                 })
                 .catch(console.error);
@@ -141,8 +146,8 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
             })
                 .then((response) => response.json())
                 .then((data) => {
-                    if (data.token) {
-                        updateReduxUser(data.user, data.token);
+                    if (data.result && data.user) {
+                        updateReduxUser(data.user, user.token!);
                     }
                 })
                 .catch(console.error);
@@ -192,11 +197,15 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
     };
 
     return (
-        <View>
+        <View style={styles.screen}>
             <View style={styles.header}>
                 <Header destination={"Chat"} goBack={true} />
             </View>
-            <View style={styles.container}>
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.container}
+                keyboardShouldPersistTaps="handled"
+            >
                 <View style={styles.underHeader}>
                     <PhotoModal
                         onClose={() => setIsPhotoModalOpened(false)}
@@ -326,21 +335,28 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
                         onPress={() => setIsDeleteModalOpened(true)}
                     />
                 </View>
-            </View>
             <DeleteAccountModal
                 onClose={() => setIsDeleteModalOpened(false)}
                 visible={isDeleteModalOpened}
                 navigation={navigation}
             />
+            </ScrollView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
+    screen: {
+        flex: 1,
+        backgroundColor: "#151515",
+    },
+    scroll: {
+        flex: 1,
+    },
     container: {
         alignItems: "center",
         backgroundColor: "#151515",
-        height: 900,
+        paddingBottom: 40,
     },
     user: {
         flexDirection: "row",

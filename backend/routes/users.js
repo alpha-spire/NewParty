@@ -73,6 +73,7 @@ router.post("/signin", async (req, res) => {
             token: existingUser.token,
             username: existingUser.username,
             _id: existingUser._id,
+            userPhoto: existingUser.userPhoto ?? null,
         });
     } catch (error) {
         res.status(500).json({

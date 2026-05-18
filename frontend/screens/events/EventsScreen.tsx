@@ -1,12 +1,13 @@
-import { StyleSheet, Text, View, Image } from "react-native";
+import { StyleSheet, Text, View, Image, Alert } from "react-native";
 import React from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
 import { CreateButton } from "../../ui/createButton";
 import { EditButton } from "../../ui/editButton";
 import { FlatList } from "react-native";
 import { EventWithUsers } from "../../types/event";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { addEvent } from "../../reducers/event";
+import { UserState } from "../../reducers/user";
 import { Fontisto } from "@expo/vector-icons";
 import Header from "../headers/Header";
 import { useGetUserEvents } from "../../hooks/useGetUSerEvents";
@@ -18,14 +19,30 @@ type EventsScreenProps = {
 
 export default function EventScreen({ navigation }: EventsScreenProps) {
     const dispatch = useDispatch();
+    const user = useSelector((state: { user: UserState }) => state.user.value);
     //Hook personnalisé qui fetch la liste des events de l'user connecté
-    const { events, isLoading, error } = useGetUserEvents();
+    const { events: allEvents, isLoading, error } = useGetUserEvents();
+
+    // Filtre : uniquement les events dont la date de début est aujourd'hui ou dans le futur
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const events = allEvents.filter(
+        (e) => e.startDate && new Date(e.startDate) >= today,
+    );
 
     const handleCreateEvent = () => {
         navigation.navigate("CreateEvent");
     };
 
     const handleModifyEvent = (item: EventWithUsers) => {
+        // Seul l'admin peut modifier l'event
+        if (item.adminId._id !== user._id) {
+            Alert.alert(
+                "Accès refusé",
+                "Seul le créateur de l'évènement peut le modifier.",
+            );
+            return;
+        }
         dispatch(addEvent(item));
         navigation.navigate("ModifyEvent");
     };
@@ -98,13 +115,13 @@ export default function EventScreen({ navigation }: EventsScreenProps) {
                                         du {formatDate(item.startDate)}
                                     </Text>
                                     <Text style={styles.eventInfos}>
-                                        à {formatHour(item.startDate)}
+                                        à {formatHour(item.startHour)}
                                     </Text>
                                     <Text style={styles.eventInfos}>
                                         jusqu'au {formatDate(item.endDate)}{" "}
                                     </Text>
                                     <Text style={styles.eventInfos}>
-                                        à {formatHour(item.endDate)}
+                                        à {formatHour(item.endHour)}
                                     </Text>
                                     <Text style={styles.eventInfos}>
                                         Lieu : {item.location}

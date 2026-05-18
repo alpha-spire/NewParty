@@ -65,11 +65,11 @@ export default function SignInModal({ onClose, visible }: SignInModalProps) {
             if (data.result) {
                 dispatch(
                     login({
-                        _id: data._id,  
+                        _id: data._id,
                         username: data.username,
                         token: data.token,
                         email: null,
-                        userPhoto: null,
+                        userPhoto: data.userPhoto ?? null,
                         // friendIds et eventIds absents → [] par défaut dans le reducer
                     }),
                 );

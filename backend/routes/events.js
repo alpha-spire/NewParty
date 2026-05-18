@@ -15,17 +15,17 @@ router.post("/createEvent", auth, async (req, res) => {
         endDate,
         startHour,
         endHour,
+        memberIds,  // IDs des membres invités à la création
     } = req.body;
 
     if (!title || !startDate) {
-        res.status(400).json({
+        return res.status(400).json({
             result: false,
             error: "Title and startDate are required",
         });
     }
 
     try {
-        // create event
         const newEvent = new Event({
             title,
             location,
@@ -34,16 +34,25 @@ router.post("/createEvent", auth, async (req, res) => {
             endDate,
             startHour,
             endHour,
-            adminId: req.user._id, //admin = user connecté, pas besoin de le passer depuis le front
-            memberIds: [],
+            adminId: req.user._id,
+            memberIds: memberIds || [],  // membres invités, tableau vide par défaut
         });
 
-        //MAJ bdd
         const savedEvent = await newEvent.save();
-        // Ajout de l'event dans la liste des events du user
+
+        // Ajout de l'event dans la liste des events de l'admin
         await User.findByIdAndUpdate(req.user._id, {
-            $push: { eventIds: savedEvent._id },
+            $addToSet: { eventIds: savedEvent._id },
         });
+
+        // Ajout de l'event dans la liste des events de chaque membre invité
+        if (Array.isArray(memberIds) && memberIds.length > 0) {
+            await User.updateMany(
+                { _id: { $in: memberIds } },
+                { $addToSet: { eventIds: savedEvent._id } },
+            );
+        }
+
         res.status(201).json({ result: true, event: savedEvent });
     } catch (error) {
         res.status(500).json({ result: false, error: "Server error" });
@@ -171,13 +180,35 @@ router.post("/update/:id", auth, async (req, res) => {
         }
 
         const updateEvent = await Event.findByIdAndUpdate(
-            req.params.id, // id de l'event à modifier
-            updateObj, // objet avec les champs à modifier
-            {
-                new: true, // pour retourner le document après modification
-                runValidators: true, // vérifie les règles du schéma (required, type...)
-            },
+            req.params.id,
+            updateObj,
+            { new: true, runValidators: true },
         );
+
+        // Synchronise User.eventIds pour les membres ajoutés et retirés
+        if (memberIds) {
+            const oldMemberIds = event.memberIds.map((id) => id.toString());
+            const newMemberIds = memberIds.map((id) => id.toString());
+
+            const added = newMemberIds.filter((id) => !oldMemberIds.includes(id));
+            const removed = oldMemberIds.filter((id) => !newMemberIds.includes(id));
+
+            // Ajoute l'event dans eventIds des nouveaux membres
+            if (added.length > 0) {
+                await User.updateMany(
+                    { _id: { $in: added } },
+                    { $addToSet: { eventIds: req.params.id } },
+                );
+            }
+            // Retire l'event de eventIds des membres supprimés
+            if (removed.length > 0) {
+                await User.updateMany(
+                    { _id: { $in: removed } },
+                    { $pull: { eventIds: req.params.id } },
+                );
+            }
+        }
+
         res.status(200).json({ result: true, event: updateEvent });
     } catch (error) {
         res.status(500).json({

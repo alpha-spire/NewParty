@@ -25,24 +25,19 @@ export default function PhotoModal({
     const [imageURI, setImageURI] = useState<string>("");
 
     async function pickImageAsync() {
-        console.log("A. pickImageAsync lancé");
         const result = await ImagePicker.launchImageLibraryAsync({
             allowsEditing: false,
             quality: 1,
         });
 
-        console.log("B. résultat picker — canceled:", result.canceled);
         if (result.canceled) {
             Alert.alert("Info", "Aucune image sélectionnée");
         } else {
-            const uri = result.assets[0].uri;
-            console.log("C. URI sélectionnée:", uri.substring(0, 60));
-            setImageURI(uri);
+            setImageURI(result.assets[0].uri);
         }
     }
 
     const handleRegister = () => {
-        console.log("D. handleRegister appelé — imageURI:", imageURI ? imageURI.substring(0, 60) : "VIDE");
         if (!imageURI) {
             Alert.alert("Erreur", "Veuillez sélectionner une image");
             return;

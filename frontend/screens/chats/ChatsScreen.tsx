@@ -1,18 +1,13 @@
-import { StyleSheet, Text, View, Image, TouchableOpacity } from "react-native";
-import {
-  NavigationProp,
-  ParamListBase
-} from "@react-navigation/native";
+import { StyleSheet, Text, View, Image, TouchableOpacity, FlatList } from "react-native";
+import { NavigationProp, ParamListBase } from "@react-navigation/native";
 import React from "react";
-import { FlatList } from "react-native";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import { EventWithUsers } from "../../types/event";
 import Header from "../headers/Header";
 import { Fontisto } from "@expo/vector-icons";
 import { addEvent } from "../../reducers/event";
 import { CreateButton } from "../../ui/createButton";
 import { useGetUserEvents } from "../../hooks/useGetUSerEvents";
-import { UserState } from "../../reducers/user";
 
 type UserScreenProps = {
   navigation: NavigationProp<ParamListBase>;
@@ -21,25 +16,27 @@ type UserScreenProps = {
 export default function ChatsScreen({ navigation }: UserScreenProps) {
   const dispatch = useDispatch();
 
-  const events = useGetUserEvents();
-
-  const user = useSelector((state: { user: UserState }) => state.user.value);
+  // Réutilise les événements de l'utilisateur — chaque event est un fil de discussion
+  const { events } = useGetUserEvents();
 
   const handleCreateChat = () => {
     navigation.navigate("CreateChat");
   };
 
+  // Stocke l'event sélectionné dans Redux puis navigue vers le chat de cet event
   const handleFocusChat = (item: EventWithUsers) => {
     dispatch(addEvent(item));
     navigation.navigate("ChatOnFocus");
   };
 
   return (
-    <View>
+    <View style={styles.screen}>
       <View style={styles.header}>
         <Header goBack={false} />
       </View>
+
       <View style={styles.container}>
+        {/* Barre sous le header : titre + bouton création */}
         <View style={styles.underHeader}>
           <Text style={styles.title}>Discussions</Text>
           <CreateButton
@@ -50,17 +47,18 @@ export default function ChatsScreen({ navigation }: UserScreenProps) {
           />
         </View>
 
+        {/* Liste des discussions — une ligne par événement */}
         <FlatList
           style={styles.listPosition}
           data={events}
           keyExtractor={(item) => item._id}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>Aucune discussion pour le moment</Text>
+          }
           renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => {
-                handleFocusChat(item);
-              }}
-            >
+            <TouchableOpacity onPress={() => handleFocusChat(item)}>
               <View style={styles.eventBox}>
+                {/* Photo de l'événement ou icône par défaut */}
                 {item.photoEventUrl ? (
                   <Image
                     style={styles.updPhoto}
@@ -72,16 +70,10 @@ export default function ChatsScreen({ navigation }: UserScreenProps) {
                     name="photograph"
                     size={25}
                     color={"white"}
-                    bottom={10}
                   />
                 )}
-
                 <View style={styles.infosBox}>
                   <Text style={styles.eventInfos}>{item.title}</Text>
-                  {/* <Text style={styles.eventInfos}>{lastMessage}</Text>
-                <Text style={styles.eventInfos}>
-                    {item.date.slice(0, 10)}
-                  </Text> */}
                 </View>
               </View>
             </TouchableOpacity>
@@ -93,9 +85,13 @@ export default function ChatsScreen({ navigation }: UserScreenProps) {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#1b1b1b",
+  },
   container: {
     backgroundColor: "#1b1b1b",
-    height: '100%',
+    height: "100%",
   },
   header: {
     flexDirection: "row",
@@ -127,7 +123,6 @@ const styles = StyleSheet.create({
   },
   eventBox: {
     width: "100%",
-    display: "flex",
     flexDirection: "row",
     padding: 10,
     backgroundColor: "#101010",
@@ -135,7 +130,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.2,
     borderColor: "white",
   },
-
   infosBox: {
     alignContent: "center",
     marginTop: 10,
@@ -144,7 +138,6 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     color: "white",
     fontSize: 20,
-    fontFamily: "",
   },
   photos: {
     backgroundColor: "#323232",
@@ -163,5 +156,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 25,
     borderColor: "white",
+  },
+  emptyText: {
+    color: "grey",
+    textAlign: "center",
+    marginTop: 40,
+    fontSize: 15,
   },
 });

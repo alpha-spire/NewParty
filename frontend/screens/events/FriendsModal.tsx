@@ -4,6 +4,7 @@ import BouncyCheckbox from "react-native-bouncy-checkbox";
 import { useState, useEffect } from "react";
 import { Xbutton } from "../../ui/xButton";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { Button } from "../../ui/button";
 import { User } from "../../types/user";
 import { useSelector } from "react-redux";
@@ -35,7 +36,7 @@ export default function FriendsModal({
         const fetchFriends = async () => {
             setIsLoading(true);
             try {
-                const response = await fetch(BACKENDADRESS + "/users/friends", {
+                const response = await apiFetch(BACKENDADRESS + "/users/friends", {
                     headers: { Authorization: `Bearer ${user.token}` },
                 });
 

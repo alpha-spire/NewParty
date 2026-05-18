@@ -1,5 +1,6 @@
 import { Alert } from "react-native";
 import { BACKENDADRESS } from "../config";
+import { apiFetch } from "./apiFetch";
 
 /**
  * Upload une image vers Cloudinary via le backend
@@ -21,7 +22,7 @@ export const uploadPhoto = async (
     });
 
     try {
-        const response = await fetch(BACKENDADRESS + "/upload/", {
+        const response = await apiFetch(BACKENDADRESS + "/upload/", {
             method: "POST",
             body: formData,
             headers: {

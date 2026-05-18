@@ -11,10 +11,6 @@ const userSchema = mongoose.Schema(
             select: false, // pour ne pas retourner le mot de passe dans les requêtes, même si on oublie de le retirer explicitement
         },
         userPhoto: { type: String, default: null }, // URL de la photo de profil, par défaut null
-        token: {
-            type: String,
-            select: false,
-        },
         friendIds: [{ ref: "users", type: mongoose.Schema.Types.ObjectId }], // liste d'amis de l'utilisateur
         eventIds: [{ ref: "events", type: mongoose.Schema.Types.ObjectId }], // liste events auxquels l'utilisateur participe
         role: { type: String, enum: ["user", "admin"], default: "user" }, // pour les droits admin,

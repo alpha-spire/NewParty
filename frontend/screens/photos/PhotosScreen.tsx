@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { CameraView, Camera, CameraType, FlashMode } from "expo-camera";
 import { useIsFocused } from "@react-navigation/native";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Entypo from "@expo/vector-icons/Entypo";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
@@ -59,7 +60,7 @@ export default function PhotosScreen(_: UserScreenProps) {
             });
 
             // Étape 1 : upload vers Cloudinary
-            const uploadRes = await fetch(BACKENDADRESS + "/upload", {
+            const uploadRes = await apiFetch(BACKENDADRESS + "/upload", {
                 method: "POST",
                 headers: { Authorization: `Bearer ${user.token}` },
                 body: formData,
@@ -68,7 +69,7 @@ export default function PhotosScreen(_: UserScreenProps) {
             if (!uploadData.result || !uploadData.photo?.url) return;
 
             // Étape 2 : sauvegarde de la photo dans l'événement (eventId dans l'URL)
-            await fetch(BACKENDADRESS + `/photos/${eventId}`, {
+            await apiFetch(BACKENDADRESS + `/photos/${eventId}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

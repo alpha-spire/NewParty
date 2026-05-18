@@ -19,9 +19,8 @@ import ChatOnFocusScreen from "./screens/chats/ChatOnFocusScreen";
 import FocusOnProfileScreen from "./screens/profile/ProfileScreen";
 
 import { Provider } from "react-redux";
-import { configureStore } from "@reduxjs/toolkit";
-import user from "./reducers/user";
-import event from "./reducers/event";
+import store from "./store";
+import { navigationRef } from "./navigationRef";
 import {
   Fontisto,
   Entypo,
@@ -31,10 +30,6 @@ import {
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-
-const store = configureStore({
-  reducer: { user, event },
-});
 
 const TabNavigator = () => {
   return (
@@ -92,7 +87,7 @@ const TabNavigator = () => {
 export default function App() {
   return (
     <Provider store={store}>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Home" component={UserScreen} />
           <Stack.Screen name="CreateEvent" component={CreateEventScreen} />

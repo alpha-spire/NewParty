@@ -2,6 +2,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { BACKENDADRESS } from "../config";
+import { apiFetch } from "../utils/apiFetch";
 import { UserState } from "../reducers/user";
 import { EventWithUsers } from "../types/event";
 
@@ -24,7 +25,7 @@ export const useGetUserEvents = () => {
             setIsLoading(true);
             setError(null);
             try {
-                const response = await fetch(
+                const response = await apiFetch(
                     BACKENDADRESS + "/events",
                     {
                         headers: {

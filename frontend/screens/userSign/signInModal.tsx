@@ -6,6 +6,7 @@ import { useDispatch } from "react-redux";
 import { login } from "../../reducers/user";
 import { useNavigation } from "@react-navigation/native";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 
 type SignInModalProps = {
     onClose: () => void;
@@ -43,7 +44,7 @@ export default function SignInModal({ onClose, visible }: SignInModalProps) {
 
         setIsLoading(true);
         try {
-            const res = await fetch(BACKENDADRESS + "/users/signin", {
+            const res = await apiFetch(BACKENDADRESS + "/users/signin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

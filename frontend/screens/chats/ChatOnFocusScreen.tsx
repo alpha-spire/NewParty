@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, TextInput, Image, Alert } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { FlatList } from "react-native";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { useSelector } from "react-redux";
 import { useEventState } from "../../reducers/event";
 import { UserState } from "../../reducers/user";
@@ -30,7 +31,7 @@ export default function ChatOnFocusScreen() {
 
         const fetchChatList = async () => {
             try {
-                const response = await fetch(
+                const response = await apiFetch(
                     BACKENDADRESS + `/messages/${currentEvent._id}`,
                     { headers: { Authorization: `Bearer ${user.token}` } },
                 );
@@ -51,7 +52,7 @@ export default function ChatOnFocusScreen() {
     const handleAddMessage = async () => {
         if (!message.trim()) return;
         try {
-            const response = await fetch(
+            const response = await apiFetch(
                 BACKENDADRESS + `/messages/${currentEvent._id}`,
                 {
                     method: "POST",

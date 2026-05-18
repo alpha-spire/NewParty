@@ -19,7 +19,24 @@ const fileUpload = require('express-fileupload');
 app.use(fileUpload());
 
 const cors = require('cors');
-app.use(cors());
+// En prod : restreint aux origines déclarées dans FRONTEND_URL (séparées par des virgules)
+// En dev  : tout est autorisé (FRONTEND_URL absent → '*')
+const allowedOrigins = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map(s => s.trim())
+    : null;
+
+app.use(cors({
+    origin: allowedOrigins
+        ? (origin, callback) => {
+            // Les apps mobiles natives n'envoient pas d'Origin — on les laisse passer
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error('CORS: origin non autorisée'));
+            }
+        }
+        : '*',
+}));
 
 
 app.use(logger("dev"));

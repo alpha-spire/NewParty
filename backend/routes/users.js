@@ -1,12 +1,23 @@
 var express = require("express");
 var router = express.Router();
 const User = require("../models/users");
-const uid2 = require("uid2");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const auth = require("../middlewares/auth");
+const rateLimit = require("express-rate-limit");
+
+// Bloque une IP après 10 tentatives échouées sur 15 minutes
+// Protège /signin et /signup contre le brute force et la création de masse de faux comptes
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // fenêtre de 15 minutes
+    max: 10,                   // max 10 requêtes par IP sur cette fenêtre
+    message: { result: false, error: "Trop de tentatives, réessaie dans 15 minutes" },
+    standardHeaders: true,     // envoie les headers RateLimit-* standard
+    legacyHeaders: false,
+});
 
 //route SIGNUP inscription user---------------------------------------------------------------
-router.post("/signup", async (req, res) => {
+router.post("/signup", authLimiter, async (req, res) => {
     const { username, password, email } = req.body;
 
     // Vérification des champs obligatoires
@@ -31,21 +42,22 @@ router.post("/signup", async (req, res) => {
         username: username,
         email: email,
         password: hash,
-        token: uid2(32),
         friendIds: [],
         eventIds: [],
     });
     //sauvegarde user dans bdd
     try {
         const savedUser = await newUser.save();
-        res.status(201).json({ result: true, token: savedUser.token });
+        // Génère un JWT signé avec l'id du nouvel user — expire dans 30 jours
+        const token = jwt.sign({ userId: savedUser._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
+        res.status(201).json({ result: true, token });
     } catch (error) {
         res.status(500).json({ result: false, error: "Error saving user" });
     }
 });
 
 //route SIGNIN  connection user------------------------------------------------------
-router.post("/signin", async (req, res) => {
+router.post("/signin", authLimiter, async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -56,21 +68,21 @@ router.post("/signin", async (req, res) => {
         return;
     }
     try {
-        const existingUser = await User.findOne({ username }).select(
-            "+password +token",
-        ); // on doit explicitement demander à récupérer le password et le token, car on a mis select: false dans le schéma pour éviter de les retourner par défaut dans les requêtes
+        const existingUser = await User.findOne({ username }).select("+password");
         if (
             !existingUser ||
             !bcrypt.compareSync(password, existingUser.password)
         ) {
             return res.status(401).json({
                 result: false,
-                error: "Invalid credentials", // message d'erreur plus générique pour ne pas indiquer si c'est le username ou le password qui est incorrect, pour des raisons de sécurité
+                error: "Invalid credentials",
             });
         }
+        // Génère un JWT signé avec l'id de l'user — expire dans 30 jours
+        const token = jwt.sign({ userId: existingUser._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
         res.status(200).json({
             result: true,
-            token: existingUser.token,
+            token,
             username: existingUser.username,
             _id: existingUser._id,
             userPhoto: existingUser.userPhoto ?? null,

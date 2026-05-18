@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
 import Header from "../headers/Header";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { useSelector, useDispatch } from "react-redux";
 import BouncyCheckbox from "react-native-bouncy-checkbox";
 import { EventWithUsers } from "../../types/event";
@@ -25,7 +26,7 @@ export default function CreateChatScreen({ navigation }: UserScreenProps) {
     useEffect(() => {
         const fetchEventList = async () => {
             try {
-                const response = await fetch(BACKENDADRESS + "/events", {
+                const response = await apiFetch(BACKENDADRESS + "/events", {
                     headers: { Authorization: `Bearer ${user.token}` },
                 });
                 const data = await response.json();

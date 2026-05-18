@@ -16,6 +16,7 @@ import { login, logout, UserState } from "../../reducers/user";
 import { Fontisto } from "@expo/vector-icons";
 import PhotoModal from "../events/PhotoModal";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { Button } from "../../ui/button";
 import { EditButton } from "../../ui/editButton";
 import { DeleteButton } from "../../ui/deleteButton";
@@ -70,7 +71,7 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
             });
 
             // Étape 1 : upload vers Cloudinary
-            const uploadRes = await fetch(BACKENDADRESS + "/upload", {
+            const uploadRes = await apiFetch(BACKENDADRESS + "/upload", {
                 method: "POST",
                 headers: { Authorization: `Bearer ${user.token}` },
                 body: formData,
@@ -82,7 +83,7 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
             const url = uploadData.photo.url;
 
             // Étape 2 : sauvegarde de l'URL en base
-            const updateRes = await fetch(BACKENDADRESS + "/users/update", {
+            const updateRes = await apiFetch(BACKENDADRESS + "/users/update", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -107,7 +108,7 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
             setUsernameError(true);
             return;
         } else {
-            fetch(BACKENDADRESS + "/users/update", {
+            apiFetch(BACKENDADRESS + "/users/update", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -134,7 +135,7 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
             setEmailError(true);
             return;
         } else {
-            fetch(BACKENDADRESS + "/users/update", {
+            apiFetch(BACKENDADRESS + "/users/update", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -161,7 +162,7 @@ export default function ProfileOnFocusScreen({ navigation }: UserScreenProps) {
             setMissingError(true);
             return;
         } else {
-            fetch(BACKENDADRESS + "/users/update", {
+            apiFetch(BACKENDADRESS + "/users/update", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useIsFocused } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { BACKENDADRESS } from "../config";
+import { apiFetch } from "../utils/apiFetch";
 import { UserState } from "../reducers/user";
 import { Invitation } from "../types/invitation";
 
@@ -20,7 +21,7 @@ export const useGetInvitations = () => {
         const fetchInvitations = async () => {
             setIsLoading(true);
             try {
-                const response = await fetch(
+                const response = await apiFetch(
                     BACKENDADRESS + "/invitations/received",
                     {
                         headers: { Authorization: `Bearer ${user.token}` },

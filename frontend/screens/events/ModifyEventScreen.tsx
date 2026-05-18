@@ -16,6 +16,7 @@ import { Fontisto, AntDesign } from "@expo/vector-icons";
 import FriendsModal from "./FriendsModal";
 import PhotoModal from "./PhotoModal";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { useDispatch, useSelector } from "react-redux";
 import { useEventState, removeEvent } from "../../reducers/event";
 import { removeEventId, UserState } from "../../reducers/user";
@@ -134,7 +135,7 @@ export default function ModifyEventScreen({
                     onPress: async () => {
                         setIsDeleting(true);
                         try {
-                            const response = await fetch(
+                            const response = await apiFetch(
                                 BACKENDADRESS +
                                     `/events/delete/${currentEvent._id}`,
                                 {
@@ -192,7 +193,7 @@ export default function ModifyEventScreen({
         }
         setIsUpdating(true);
         try {
-            const response = await fetch(BACKENDADRESS + `/events/update/${currentEvent._id}`, {
+            const response = await apiFetch(BACKENDADRESS + `/events/update/${currentEvent._id}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

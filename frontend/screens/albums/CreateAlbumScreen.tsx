@@ -4,6 +4,7 @@ import Header from "../headers/Header";
 import PhotoModal from "../events/PhotoModal";
 import { Fontisto } from "@expo/vector-icons";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { useSelector } from "react-redux";
 import { UserState } from "../../reducers/user";
 
@@ -26,7 +27,7 @@ export default function CreateAlbumScreen() {
         type: "image/jpeg",
       });
 
-      const response = await fetch(BACKENDADRESS + "/upload", {
+      const response = await apiFetch(BACKENDADRESS + "/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${user.token}` },
         body: formData,

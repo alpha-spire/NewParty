@@ -14,6 +14,7 @@ import { Fontisto, AntDesign } from "@expo/vector-icons";
 import FriendsModal from "./FriendsModal";
 import PhotoModal from "./PhotoModal";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { useSelector, useDispatch } from "react-redux";
 import { addEventId, UserState } from "../../reducers/user";
 import { addEvent } from "../../reducers/event";
@@ -125,7 +126,7 @@ export default function CreateEventScreen({
         }
         setIsLoading(true);
         try {
-            const response = await fetch(
+            const response = await apiFetch(
                 BACKENDADRESS + "/events/createEvent",
                 {
                     method: "POST",

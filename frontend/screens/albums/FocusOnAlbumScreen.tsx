@@ -4,6 +4,7 @@ import { Fontisto } from "@expo/vector-icons";
 import { AntDesign } from "@expo/vector-icons";
 import { FlatList } from "react-native";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { useSelector } from "react-redux";
 import { useEventState } from "../../reducers/event";
 import { UserState } from "../../reducers/user";
@@ -34,7 +35,7 @@ export default function FocusOnAlbum() {
 
         const fetchPhotoList = async () => {
             try {
-                const response = await fetch(
+                const response = await apiFetch(
                     BACKENDADRESS + `/photos/${currentAlbum._id}`,
                     { headers: { Authorization: `Bearer ${user.token}` } },
                 );
@@ -60,7 +61,7 @@ export default function FocusOnAlbum() {
             });
 
             // Étape 1 : upload du fichier, récupération de l'URL Cloudinary
-            const uploadResponse = await fetch(BACKENDADRESS + "/upload", {
+            const uploadResponse = await apiFetch(BACKENDADRESS + "/upload", {
                 method: "POST",
                 headers: { Authorization: `Bearer ${user.token}` },
                 body: formData,
@@ -73,7 +74,7 @@ export default function FocusOnAlbum() {
             }
 
             // Étape 2 : enregistrement de la photo en base avec l'URL et l'eventId
-            const saveResponse = await fetch(
+            const saveResponse = await apiFetch(
                 BACKENDADRESS + `/photos/${currentAlbum._id}`,
                 {
                     method: "POST",
@@ -119,7 +120,7 @@ export default function FocusOnAlbum() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            const response = await fetch(
+                            const response = await apiFetch(
                                 BACKENDADRESS + `/photos/delete/${photo._id}`,
                                 {
                                     method: "DELETE",

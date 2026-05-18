@@ -1,1 +1,1 @@
-export const BACKENDADRESS = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://192.168.1.160:3000";
+export const BACKENDADRESS = process.env.EXPO_PUBLIC_BACKEND_URL ?? "https://new-party-backend.vercel.app";

@@ -1,6 +1,7 @@
 import React from "react";
 import { Text, View, StyleSheet, Modal } from "react-native";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import { Button } from "../../ui/button";
 import { NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
@@ -22,7 +23,7 @@ export default function DeleteAccountModal({
 
     const handleDeleteUser = async () => {
         try {
-            const response = await fetch(BACKENDADRESS + "/users/delete/", {
+            const response = await apiFetch(BACKENDADRESS + "/users/delete/", {
                 method: "DELETE",
                 headers: { Authorization: `Bearer ${user.token}` },
             });

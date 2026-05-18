@@ -2,6 +2,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { BACKENDADRESS } from "../config";
+import { apiFetch } from "../utils/apiFetch";
 import { UserState } from "../reducers/user";
 import { User } from "../types/user";
 
@@ -21,7 +22,7 @@ export const useGetFriends = () => {
             setIsLoading(true);
             setError(null);
             try {
-                const response = await fetch(BACKENDADRESS + "/users/friends", {
+                const response = await apiFetch(BACKENDADRESS + "/users/friends", {
                     headers: { Authorization: `Bearer ${user.token}` },
                 });
                 if (!response.ok) {

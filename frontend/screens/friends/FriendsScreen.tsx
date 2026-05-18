@@ -14,6 +14,7 @@ import { NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { UserState, addFriend, removeFriend } from "../../reducers/user";
 import { BACKENDADRESS } from "../../config";
+import { apiFetch } from "../../utils/apiFetch";
 import Header from "../headers/Header";
 import { User } from "../../types/user";
 import { useGetFriends } from "../../hooks/useGetFriends";
@@ -47,7 +48,7 @@ export default function FriendsScreen({ navigation }: UserScreenProps) {
         setIsSearching(true);
 
         try {
-            const response = await fetch(
+            const response = await apiFetch(
                 BACKENDADRESS + "/users/search/" + searchUsername.trim(),
                 { headers: { Authorization: `Bearer ${user.token}` } },
             );
@@ -73,7 +74,7 @@ export default function FriendsScreen({ navigation }: UserScreenProps) {
     const handlesendFriend = async (friend: User) => {
         setLoadingFriendId(friend._id);
         try {
-            const response = await fetch(BACKENDADRESS + "/invitations/send", {
+            const response = await apiFetch(BACKENDADRESS + "/invitations/send", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -117,7 +118,7 @@ export default function FriendsScreen({ navigation }: UserScreenProps) {
         sender: Pick<User, "_id" | "username" | "userPhoto">,
     ) => {
         try {
-            const response = await fetch(
+            const response = await apiFetch(
                 BACKENDADRESS + `/invitations/respond/${invitationId}`,
                 {
                     method: "POST",
@@ -162,7 +163,7 @@ export default function FriendsScreen({ navigation }: UserScreenProps) {
                     onPress: async () => {
                         setLoadingFriendId(friend._id);
                         try {
-                            const response = await fetch(
+                            const response = await apiFetch(
                                 BACKENDADRESS + "/users/update",
                                 {
                                     method: "POST",

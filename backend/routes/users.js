@@ -50,7 +50,7 @@ router.post("/signup", authLimiter, async (req, res) => {
         const savedUser = await newUser.save();
         // Génère un JWT signé avec l'id du nouvel user — expire dans 30 jours
         const token = jwt.sign({ userId: savedUser._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
-        res.status(201).json({ result: true, token });
+        res.status(201).json({ result: true, token, _id: savedUser._id, username: savedUser.username, email: savedUser.email });
     } catch (error) {
         res.status(500).json({ result: false, error: "Error saving user" });
     }

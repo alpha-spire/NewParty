@@ -88,10 +88,11 @@ export default function SignUpModal({ onClose, visible }: SignUpModalProps) {
             if (data.result) {
                 dispatch(
                     login({
+                        _id: data._id,
                         email,
                         username,
                         token: data.token,
-                        userPhoto: null, // pas de photo à l'inscription
+                        userPhoto: null,
                     }),
                 );
                 onClose();

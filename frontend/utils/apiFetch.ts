@@ -10,7 +10,9 @@ import { navigateTo } from "../navigationRef";
 export async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
     const response = await fetch(url, options);
 
-    if (response.status === 401) {
+    // Ne déclenche le logout que si l'user était connecté (token présent)
+    // Évite de perturber signin/signup dont le backend répond aussi 401 sur mauvais identifiants
+    if (response.status === 401 && store.getState().user.value.token) {
         store.dispatch(logout());
         navigateTo("Home");
     }

@@ -23,6 +23,7 @@ export default function SignInModal({ onClose, visible }: SignInModalProps) {
     // États d'erreur
     const [passwordError, setPasswordError] = useState(false);
     const [missingError, setMissingError] = useState(false);
+    const [serverError, setServerError] = useState<string | null>(null);
     // État de chargement pendant l'appel API
     const [isLoading, setIsLoading] = useState(false);
 
@@ -36,6 +37,7 @@ export default function SignInModal({ onClose, visible }: SignInModalProps) {
         // Reset des erreurs avant chaque tentative
         setMissingError(false);
         setPasswordError(false);
+        setServerError(null);
 
         if (!username || !password) {
             setMissingError(true);
@@ -57,9 +59,10 @@ export default function SignInModal({ onClose, visible }: SignInModalProps) {
             // Gestion des erreurs retournées par le backend
             if (data.error === "Missing or empty fields") {
                 setMissingError(true);
-            }
-            if (data.error === "Invalid credentials") {
+            } else if (data.error === "Invalid credentials") {
                 setPasswordError(true);
+            } else if (data.error) {
+                setServerError(data.error);
             }
 
             //connexion réussie, on stocke les infos de l'utilisateur dans le store Redux
@@ -118,6 +121,9 @@ export default function SignInModal({ onClose, visible }: SignInModalProps) {
                 )}
                 {passwordError && (
                     <Text style={styles.error}>Identifiants incorrects</Text>
+                )}
+                {serverError && (
+                    <Text style={styles.error}>{serverError}</Text>
                 )}
 
                 {/* Bouton de connexion */}

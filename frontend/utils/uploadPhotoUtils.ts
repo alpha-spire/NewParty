@@ -4,36 +4,34 @@ import { apiFetch } from "./apiFetch";
 
 /**
  * Upload une image vers Cloudinary via le backend
- * @param imageURI  — URI locale de l'image (depuis ImagePicker)
- * @param token     — token de l'user connecté pour l'auth
- * @returns         — URL Cloudinary de l'image uploadée, ou null si échec
+ * @param imageBase64  — image encodée en base64 (data:image/jpeg;base64,...)
+ * @param token        — token de l'user connecté pour l'auth
+ * @returns            — URL Cloudinary de l'image uploadée, ou null si échec
  */
 export const uploadPhoto = async (
-    imageURI: string,
+    imageBase64: string,
     token: string,
 ): Promise<string | null> => {
-    // retourne l'URL ou null, pas de setPhoto ici
-    const formData = new FormData();
-    // @ts-expect-error — FormData natif React Native ne supporte pas le typage complet
-    formData.append("photoFromFront", {
-        uri: imageURI,
-        name: "photo.jpg",
-        type: "image/jpeg",
-    });
-
     try {
         const response = await apiFetch(BACKENDADRESS + "/upload/", {
             method: "POST",
-            body: formData,
+            body: JSON.stringify({ photo: imageBase64 }),
             headers: {
-                Authorization: `Bearer ${token}`, // token passé en paramètre
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
             },
         });
 
-        const data = await response.json();
+        let data: any;
+        try {
+            data = await response.json();
+        } catch {
+            Alert.alert("Erreur upload", `Status HTTP ${response.status} - réponse non-JSON`);
+            return null;
+        }
 
         if (!response.ok) {
-            Alert.alert("Erreur", data.error || "Échec de l'upload");
+            Alert.alert("Erreur upload", `[${response.status}] ${data?.error ?? "Échec de l'upload"}`);
             return null; // null en cas d'échec
         }
         if (data.result) {

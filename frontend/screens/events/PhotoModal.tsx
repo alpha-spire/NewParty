@@ -20,29 +20,32 @@ export default function PhotoModal({
 }: {
     onClose: () => void;
     visible: boolean;
-    addPhoto: (imageURI: string) => void;
+    addPhoto: (base64: string) => void;
 }) {
     const [imageURI, setImageURI] = useState<string>("");
+    const [imageBase64, setImageBase64] = useState<string>("");
 
     async function pickImageAsync() {
         const result = await ImagePicker.launchImageLibraryAsync({
-            allowsEditing: false,
-            quality: 1,
+            allowsEditing: true,
+            quality: 0.3,
+            base64: true,
         });
 
         if (result.canceled) {
             Alert.alert("Info", "Aucune image sélectionnée");
         } else {
             setImageURI(result.assets[0].uri);
+            setImageBase64(result.assets[0].base64 ?? "");
         }
     }
 
     const handleRegister = () => {
-        if (!imageURI) {
+        if (!imageBase64) {
             Alert.alert("Erreur", "Veuillez sélectionner une image");
             return;
         }
-        addPhoto(imageURI);
+        addPhoto(`data:image/jpeg;base64,${imageBase64}`);
         onClose();
     };
 

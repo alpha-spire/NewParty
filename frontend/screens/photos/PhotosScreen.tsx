@@ -48,22 +48,18 @@ export default function PhotosScreen(_: UserScreenProps) {
 
             const photo = await cameraRef.current?.takePictureAsync({
                 quality: 0.3,
+                base64: true,
             });
-            if (!photo) return;
+            if (!photo?.base64) return;
 
-            const formData = new FormData();
-            // @ts-expect-error — FormData sur React Native n'accepte pas le type objet nativement
-            formData.append("photoFromFront", {
-                uri: photo.uri,
-                name: "photo.jpg",
-                type: "image/jpeg",
-            });
-
-            // Étape 1 : upload vers Cloudinary
+            // Étape 1 : upload vers Cloudinary via JSON base64
             const uploadRes = await apiFetch(BACKENDADRESS + "/upload", {
                 method: "POST",
-                headers: { Authorization: `Bearer ${user.token}` },
-                body: formData,
+                headers: {
+                    Authorization: `Bearer ${user.token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ photo: `data:image/jpeg;base64,${photo.base64}` }),
             });
             const uploadData = await uploadRes.json();
             if (!uploadData.result || !uploadData.photo?.url) return;

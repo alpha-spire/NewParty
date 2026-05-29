@@ -5,6 +5,7 @@ import { AntDesign } from "@expo/vector-icons";
 import { FlatList } from "react-native";
 import { BACKENDADRESS } from "../../config";
 import { apiFetch } from "../../utils/apiFetch";
+import { uploadPhoto } from "../../utils/uploadPhotoUtils";
 import { useSelector } from "react-redux";
 import { useEventState } from "../../reducers/event";
 import { UserState } from "../../reducers/user";
@@ -50,28 +51,11 @@ export default function FocusOnAlbum() {
     }, [isFocused]);
 
     // Uploade l'image puis crée une entrée Photo en base liée à l'événement
-    const handleAddPhoto = async (imageURI: string) => {
+    const handleAddPhoto = async (imageBase64: string) => {
         try {
-            const formData = new FormData();
-            // @ts-expect-error — FormData sur React Native n'accepte pas le type objet nativement
-            formData.append("photoFromFront", {
-                uri: imageURI,
-                name: "photo.jpg",
-                type: "image/jpeg",
-            });
-
-            // Étape 1 : upload du fichier, récupération de l'URL Cloudinary
-            const uploadResponse = await apiFetch(BACKENDADRESS + "/upload", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${user.token}` },
-                body: formData,
-            });
-            const uploadData = await uploadResponse.json();
-
-            if (!uploadData.photo?.url) {
-                Alert.alert("Erreur", "Upload échoué");
-                return;
-            }
+            // Étape 1 : upload vers Cloudinary via JSON base64
+            const photoUrl = await uploadPhoto(imageBase64, user.token!);
+            if (!photoUrl) return;
 
             // Étape 2 : enregistrement de la photo en base avec l'URL et l'eventId
             const saveResponse = await apiFetch(
@@ -83,15 +67,13 @@ export default function FocusOnAlbum() {
                         Authorization: `Bearer ${user.token}`,
                     },
                     body: JSON.stringify({
-                        uri: uploadData.photo.url,
+                        uri: photoUrl,
                         eventId: currentAlbum._id,
-                        date: uploadData.photo.date,
                     }),
                 },
             );
             const saveData = await saveResponse.json();
             if (saveData.result) {
-                // Construit le PopulatedPhoto en ajoutant les infos user (saveData.photo._userId est un ObjectId brut)
                 const newPhoto: PopulatedPhoto = {
                     ...saveData.photo,
                     _userId: {

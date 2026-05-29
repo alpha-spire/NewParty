@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/users");
 
+//Verifie la presence et la validite du token dans l'en-tete Authorization
 module.exports = async function auth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
